@@ -1,5 +1,5 @@
 EXE      := dl_auto
-SRCS     := cli_dl_auto_mo.f90 main.f90
+SRCS     := cli_dl_auto_mo.f90 dl_auto_mo.f90 main.f90
 DIR_PROJ := auto/
 VPATH    := 
 
