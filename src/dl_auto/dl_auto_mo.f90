@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-15 17:38:56.
+! Last Updated: 2019-06-15 23:30:36
 !===========================================================
 ! HTML downloader for auto
 !
@@ -8,49 +8,66 @@
 module dl_auto_mo
 
   use file_mo
+  use px_mo
   
   implicit none
+
+  type cf_ty
+
+    character(255) :: PLACE     = 'NA'
+    character(255) :: DIR_HTML  = 'NA'
+    character(255) :: DIR_CSV   = 'NA'
+    character(255) :: F_LIC     = 'NA'
+    integer        :: MINS_RUN  = -99999
+    integer        :: SEC_SLEEP = -99999
+
+  end type 
 
   type racer_ty
 
     character(20) :: name  = 'NA'
     character(20) :: place = 'NA'
     integer       :: year_birth  = iNA
-    integer       :: rank_goal   = iNA
-    integer       :: handycup    = iNA ! Meters
-    real(8)       :: time_trial  = iNA ! Minutes
-    real(8)       :: time_goal   = iNA ! Minutes
-    real(8)       :: time_start  = iNA ! Minutes
-    logical       :: is_trouble  = .false.
-    logical       :: is_abnormal = .false.
+
+  end type
+
+  type racetime_ty
+
+    real(8) :: trial       = iNA ! Minutes
+    real(8) :: goal        = iNA ! Minutes
+    real(8) :: start       = iNA ! Minutes
+    integer :: rank_goal   = iNA
+    integer :: handycup    = iNA ! Meters
+    logical :: is_trouble  = .false.
+    logical :: is_abnormal = .false.
 
   end type
 
   type race_ty
 
-    character(20) :: title   = 'NA'
-    character(20) :: place   = 'NA'
-    character(20) :: weather = 'NA'
-    character(20) :: road    = 'NA' ! Race road condition
-    integer       :: year    = iNA
-    integer       :: mon     = iNA
-    integer       :: day     = iNA
-    integer       :: rd      = iNA ! Race round
-    integer       :: dist    = iNA ! Distance of the race
-    real(8)       :: tp      = NA
-    real(8)       :: tp_road = NA
-    real(8)       :: hm      = NA
+    character(20)  :: title   = 'NA'
+    character(20)  :: place   = 'NA'
+    character(20)  :: weather = 'NA'
+    character(20)  :: road    = 'NA' ! Race road condition
+    integer        :: year    = iNA
+    integer        :: mon     = iNA
+    integer        :: day     = iNA
+    integer        :: rd      = iNA ! Race round
+    integer        :: dist    = iNA ! Distance of the race
+    real(8)        :: tp      = NA
+    real(8)        :: tp_road = NA
+    real(8)        :: hm      = NA
 
   end type
 
   type, extends(race_ty) :: webpage_ty
 
-    character(255) :: prefix        = 'http://autorace.jp/netstadium/RaceResult/'
-    character(255) :: url           = 'NA'
-    character(255) :: dir_save_html = '.'
-    character(255) :: dir_save_csv  = '.'
-    character(255) :: fn_save_html  = 'html'
-    character(255) :: fn_save_csv   = 'csv'
+    character(255) :: prefix   = 'http://autorace.jp/netstadium/RaceResult/'
+    character(255) :: url      = 'NA'
+    character(255) :: dir_html = '.'
+    character(255) :: dir_csv  = '.'
+    character(255) :: fn_html  = 'html'
+    character(255) :: fn_csv   = 'csv'
 
   contains
 
@@ -62,25 +79,109 @@ module dl_auto_mo
 
 contains
 
+  subroutine read_config (cf, cf_nml, is_print)
+    
+    type(cf_ty)                   :: cf
+    character(*), intent(in)      :: cf_nml
+    logical, intent(in), optional :: is_print
+    integer u
+
+    namelist /config/ cf 
+
+    print '(a$)', 'Reading configuration file ... '
+
+    open (newunit = u, file = cf_nml, status = 'old')
+
+    read (u, nml = config)
+
+    close (u)
+
+    print '(a)', 'done'
+
+    if (present (is_print)) then
+
+      if (is_print) then
+
+        print '(a)', 'PLACEk   : '//trim(cf%PLACE   ) 
+        print '(a)', 'DIR_HTML : '//trim(cf%DIR_HTML) 
+        print '(a)', 'DIR_CSV  : '//trim(cf%DIR_CSV ) 
+        print '(a)', 'F_LIC    : '//trim(cf%F_LIC   ) 
+        print *,     'MINS_RUN : ', cf%MINS_RUN      
+        print *,     'SEC_SLEEP: ', cf%SEC_SLEEP     
+
+      end if
+
+    end if
+
+  end subroutine
+
+  subroutine construct_days (days, date_fr, date_to)
+
+    type(datetime), intent(inout), allocatable :: days(:)
+    character(*),   intent(in)                 :: date_fr
+    character(*),   intent(in)                 :: date_to
+    type(datetime)                             :: t_fr, t_to
+    integer                                    :: ndays
+
+    t_fr = strptime (date_fr//' 00:00:00', "%Y-%m-%d %H:%M:%S")
+    t_to = strptime (date_to//' 00:00:00', "%Y-%m-%d %H:%M:%S")
+    days = datetimeRange(t_fr, t_to, timedelta(days = 7))
+    ndays = size(days)
+
+  end subroutine
+
+  subroutine get_csv_from_html (this, year, mon, day, rd, place, dir_html, dir_csv)
+
+    class(webpage_ty), intent(inout) :: this
+    integer,           intent(in)    :: year, mon, day, rd
+    character(255),    intent(in)    :: place, dir_html, dir_csv
+    character(1000), allocatable     :: lines(:)
+    integer                          :: i
+
+    this%year     = year
+    this%mon      = mon
+    this%day      = day
+    this%rd       = rd
+    this%place    = trim(place)
+    this%dir_html = trim(dir_html)
+    this%dir_csv  = trim(dir_csv)
+
+    call this%set_url
+
+    call this%get_html
+
+    call read_html_files (lines, file = trim(this%dir_html)//trim(this%fn_html)//'.html')
+
+    do concurrent ( i = 1:size(lines) )
+
+      call clean_line ( lines(i) )
+
+    end do
+
+    call write_csv_files (lines, file = trim(this%dir_csv)//trim(this%fn_csv)//'.csv')
+
+  end subroutine
+
   subroutine set_url (this)
 
     class(webpage_ty), intent(inout) :: this
-    character(4) :: year_c
-    character(2) :: mon_c
-    character(2) :: day_c
-    character(2) :: rd_c
+    character(4)                     :: year_c
+    character(2)                     :: mon_c
+    character(2)                     :: day_c
+    character(1)                     :: rd_c
 
-    write(year_c, '("year=", i4.0)') this%year
-    write(mon_c,  '("mon=",  i2.2)') this%mon
-    write(day_c,  '("day=",  i2.2)') this%day
-    write(rd_c,   '("rd=",   i0)'  ) this%rd
+    write(year_c, '(i4.0)') this%year
+    write(mon_c,  '(i2.2)') this%mon
+    write(day_c,  '(i2.2)') this%day
+    write(rd_c,   '(i0)'  ) this%rd
 
-    this%url = trim(this%prefix)//trim(this%place)//'/'//trim(year_c)//'-'//&
-               trim(mon_c)//'-'//trim(day_c)//'_'//trim(this%rd_c)
+    this%url = trim(this%prefix)//trim(this%place)//'/'//&
+               trim(year_c)//'-'//trim(mon_c)//'-'//trim(day_c)//'_'//trim(rd_c)
+
     print '(a)', 'URL: ', trim(this%url)
 
-    write(this%filename_save_html,&
-      '(i4.0, "-", i2.2, "-", i2.2, "_", i0, "_", a)')&
+    write (this%fn_html,&
+      '(i4.0, "-", i2.2, "-", i2.2, "_", i0, "_", a)') &
       this%year, this%mon, this%day, this%rd, trim(this%place)
 
   end subroutine
@@ -90,267 +191,182 @@ contains
     class(webpage_ty), intent(inout) :: this
     character(255)                   :: cmd
 
-    print '(a)', 'Downloading htm: ', trim(this%url), ' to ', trim(this%dir_save_html)
+    print '(a)', 'Downloading htm: ', trim(this%url), ' to ', trim(this%dir_html)
 
-    cmd = trim('curl "'//trim(this%url)//'" -o '//trim(this%dir_save_html)//&
-          '/"'//trim(this%filename_save_html)//'".htm')
+    cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(this%dir_html)//&
+          trim(this%fn_html)//'.html"')
 
     print *, trim(cmd)
+
+    call execute_command_line ( 'mkdir -p '//trim(this%dir_html) )
 
     call execute_command_line(cmd)
 
   end subroutine
 
-  subroutine get_csv_from_html (this)
+  subroutine read_html_files (lines, file)
 
-    use Posix_mo
-    class(webpage_ty), intent(inout) :: this
-    type(file_ty)   :: f_htmll, f_csv
-    character(1000) :: line = '', line2 = ''
-    character(19)   :: date_time(1)
-    type(posix_ty)  :: px
-    logical         :: is_table, is_in_blacket, is_j_block_nolocked(5000)
-    integer         :: i, j, k, nrow, j_we_fr = 0, j_we_to = 0
+    character(*), allocatable, intent(inout) :: lines(:)
+    character( len(lines) ), allocatable     :: lines_(:)
+    character(*), intent(in)                 :: file
+    logical                                  :: is_table
+    integer                                  :: i_fr, i_to
+    integer                                  :: i, u, nr
 
-    this%savename_csv = this%savename
+    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
 
-    print '(a)', 'Extracting csv data from the downloaded html: ', trim(this%fn_save_html), &
-                 ' and save them as csv: ', trim(this%dir_save_csv)//'/'//trim(this%fn_save_csv)
+    is_table = .false.
 
-    call f_html%Construct_File (path_op=trim(this%dir_save_html)//'\'//trim(this%fn_save_html)//'.html')
-    call f_csv %Construct_File (path_op=trim(this%dir_save_csv )//'\'//trim(this%fn_save_csv )//'.csv' )
+    open (newunit = u, file = file, status = 'old')
 
-    print '(2a, a$)', 'Opening a html file: ', trim(f_html%path), '...'
+    nr = count_rows (u)
 
-    open(newunit=f_html%unit, file=trim(f_html%path), status='old', iostat=f_html%stat, iomsg=f_html%msg)
+    allocate ( lines_(nr) )
+    
+    i_fr = 1
+    i_to = nr
 
-    if (f_html%stat /= 0) then
+    do i = 1, nr
 
-      print *, ''
-      print *, '************************************************************'
-      print *, 'Error occured upon opening the html file: ', trim(f_html%msg)
-      print *, '************************************************************'
+      read (u, '(a)') lines_(i)
 
-      return
+      ! Begining of table
+      if ( index(lines_(i), '<td class="light f16">') > 0 ) then
 
-    else
-
-      print '(a)', 'done'
-
-    end if
-
-    print '(2a, a$)', 'Opening a csv file: ', trim(f_csv%path), '...'
-
-    open(newunit=f_csv%unit, file=trim(f_csv%path), status='replace', iostat=f_csv%stat, iomsg=f_csv%msg)
-
-    if (f_csv%stat /= 0) then
-
-      print *, 'Error occured upon opening the html file: ', trim(f_csv%msg)
-
-      stop
-
-    else
-
-      write(f_csv%unit, FMT_CSV_STR) "race_title", "year", "mon", "day", "rd", "place", "name", "handycup"
-
-      print '(a)', 'done'
-
-    end if
-
-    date_time = Get_Date_Time_From_Values (this%year, this%mon, this%day, 1)
-
-    call px%Construct_Posix_From_Time_Stamp (date_time)
-
-    is_table      = .false.
-    is_in_blacket = .false.
-    nrow          = 0
-
-    do while (nrow < 1000)
-
-      line                = ''
-      line2               = ''
-      is_j_block_nolocked = .false.
-      j_we_fr             = 0
-      j_we_to             = 0
-
-      read(f_html%unit, '(a)', end = 10) line
-
-      if (index(line, "<table id='tablefix1' class='data2_s'>") > 0) then
+        i_fr = i
 
         is_table = .true.
 
-        do i = 1, 2
+      end if
 
-          read(f_html%unit, '()', end=10) ! Skip headers
+      ! End of the table
+      if ( index(lines_(i), '</table>') > 0 .and. is_table) i_to = i - 1
 
-        end do
+    end do
 
-        cycle
+    close (u)
+
+    allocate ( lines(i_to - i_fr + 1) )
+
+    lines = lines_(i_fr:i_to)
+
+    print '(a)', 'done'
+
+  end subroutine
+
+  subroutine write_csv_files (lines, file)
+
+    character(*), intent(in) :: lines(:)
+    character(*), intent(in) :: file
+    integer                  :: i, u, nr
+
+    print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
+
+    call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
+
+    open (newunit = u, file = file, status = 'replace')
+
+    nr = size(lines)
+
+    write (u, FMT_CSV_STR) "race_title", "year", "mon", "day", "rd", "place", "name", "handycup"
+
+    do i = 1, nr
+
+      print '(a)', trim( lines(i) )
+
+      write (u, '(a)') lines(i)
+
+    end do
+
+    close (u)
+
+    print '(a)', 'done'
+
+  end subroutine
+
+  pure subroutine clean_line (line)
+
+    character(*), intent(inout) :: line
+    character(len(line))        :: line2
+    logical                     :: is_in_blacket, is_j_block_nolocked(5000)
+    integer                     :: i_fr, i_to
+    integer                     :: i, k
+
+    is_in_blacket       = .false.
+    is_j_block_nolocked = .false.
+
+    i_fr = 0
+    i_to = 0
+
+    line2 = ''
+
+    call string_replace (line, ' class="light f16"',        '')
+    call string_replace (line, ' class="f16"',              '')
+    call string_replace (line, ' class="td_blue_center"',   '')
+    call string_replace (line, ' class="td_orange_center"', '')
+
+    line = line( index(line, '<td'):index(line, '</td>', back = .true.) - 1 ) ! Omit <tr> tags
+
+    i_fr = index(line, 'alt') + 5
+
+    if (i_fr > 5) then
+
+      i_to = i_fr + index(line(i_fr:), '"') - 2
+
+      is_j_block_nolocked(i_fr:i_to) = .true.
+
+      !print *, 'Word: ', line(i_fr:i_to), ' has been blocked.'
+
+    end if
+
+    !
+    ! Letter by letter process: delete unwanted letters
+    !
+    do i = 1, len_trim(line)
+
+      if (line(i:i) == '<') then
+
+        is_in_blacket = .true.
 
       end if
 
-      if (index(line, '</table>') > 0 .and. is_table) then
+      if (line(i:i) == '>') then
 
-        is_table = .false.
+        is_in_blacket = .false.
 
-        exit
-
-      end if
-
-      if (is_table) then
-
-        line = line(index(line, '<td'):index(line, '</td>', back=.true.)-1) ! Omit <tr> tags
-
-        j_we_fr = index(line, 'alt') + 5
-
-        if (j_we_fr > 5) then
-
-          j_we_to = j_we_fr + index(line(j_we_fr:), '"') - 2
-
-          is_j_block_nolocked(j_we_fr:j_we_to) = .true.
-
-          print *, 'Word: ', line(j_we_fr:j_we_to), ' has been blocked.'
-
-        end if
-
-        nrow = nrow + 1
+        line(i:i) = ''
 
       end if
 
-      ! letter by letter process: delete unwanted letters
-      if (nrow > 0) then
+      if (line(i:i+2) == '/td') then
 
-        do j = 1, len_trim(line)
+        line(i-1:i-1) = ','
 
-          if (line(j:j) == '<') then
+      end if
 
-            is_in_blacket = .true.
+      if (is_in_blacket .and. line(i:i) /= ',' .and. .not. is_j_block_nolocked(i)) then
 
-          end if
-
-          if (line(j:j) == '>') then
-
-            is_in_blacket = .false.
-
-            line(j:j) = ''
-
-          end if
-
-          if (line(j:j+2) == '/td') then
-
-            line(j-1:j-1) = ','
-
-          end if
-
-          if (is_in_blacket .and. line(j:j) /= ',' .and. .not. is_j_block_nolocked(j)) then
-
-            line(j:j) = ''
-
-          end if
-
-        end do
-
-        ! Delete white space in the line
-        k = 1
-        do i = 1, len(line)
-
-          if (line(i:i) == ' ') cycle
-
-          line2(k:k) = line(i:i)
-
-          k = k + 1
-
-        end do
-
-        ! Write clean data
-        print '(a)', trim(line2)
-
-        write(f_csv%unit,&
-          '(a, a, i5, a, f7.4, a, f8.4, a, i1, a, i1, a, a19, a, i0, a, i0, a, i0, a, a)') &
-          trim(this%name), ',', this%block_no, ',', this%lat, ',', this%lon, ',',&
-          this%has_ra_mj, ',', this%is_island, ',', px%date_time, ',', this%year,&
-          ',', this%mon, ',', this%day, ',', trim(line2)
-
-        px = px + 60 * 60
+        line(i:i) = ''
 
       end if
 
     end do
 
-    10 continue
+    !
+    ! Delete white space in the line
+    !
+    k = 1
 
-    close(f_html%unit)
-    close(f_csv%unit)
+    do i = 1, len(line)
+
+      if (line(i:i) == ' ') cycle
+
+      line2(k:k) = line(i:i)
+
+      k = k + 1
+
+    end do
 
   end subroutine
 
 end module
-
-program main
-  use dl_weather_from_jma_mo
-  use my_tools_mo
-  implicit none
-  integer          :: n_files = 0, n = 1
-  character(10)    :: c, d
-  character(10000) :: line
-  character(255)   :: str(100)
-  type(file_ty)    :: f(2)
-  type(cmd_ty)     :: cmd
-  type(obstry_ty)  :: obstry
-  integer          :: j_name, j_prec_no, j_block_no, j_lat, j_lon, j_has_ra_mj, j_is_island
-
-  cmd%exe       = 'dl_weather_from_jma'
-  cmd%version   = '1.0'
-  cmd%usage(1)  = 'Usage: '//trim(cmd%exe)//' [OPTIONS]'
-  cmd%usage(2)  = ''
-  cmd%usage(3)  = 'Example: '//trim(cmd%exe)//'.exe -f info_obstry.csv -d 2016-01-01 -s1 html -s2 csv -n 1'
-  cmd%usage(4)  = 'NB: Max number of types of condition is 100'
-  cmd%usage(5)  = 'Program options:'
-  cmd%usage(6)  = ''
-  cmd%usage(7)  = '  -f,  --filename    followed by path of a file regarding observatory information'
-  cmd%usage(8)  = '  -d,  --date        followed by date in format as yyyy-mm-dd'
-  cmd%usage(8)  = '  -s1, --savedir     followed by html file directory for download'
-  cmd%usage(8)  = '  -s2, --savedir_csv followed by directory of csv data obtained from html data'
-  cmd%usage(8)  = '  -n                 1 for download html and 0 for skipping downlond (only to convert html to csv)'
-  cmd%usage(9)  = '  -v,  --version print version information and exit'
-  cmd%usage(10) = '  -h,  --help    print usage information and exit'
-
-  call cmd%cmdline(f, n_files, n, c, d, obstry%savedir, obstry%savedir_csv)
-  print *, "info_obstry: ", trim(f(1)%path)
-  print *, "Date: ",        trim(d)
-
-  call f(1)%Open_File (status='old', has_rownames=.false., is_for_writing=.false.)
-  read(f(1)%unit, '(a)') line
-  call Get_Strings_From_Line (line, str)
-  j_name      = f(1)%Get_Target_Column_Index ('name')
-  j_prec_no   = f(1)%Get_Target_Column_Index ('prec_no')
-  j_block_no  = f(1)%Get_Target_Column_Index ('block_no')
-  j_lat       = f(1)%Get_Target_Column_Index ('lat')
-  j_lon       = f(1)%Get_Target_Column_Index ('lon')
-  j_has_ra_mj = f(1)%Get_Target_Column_Index ('has_ra_mj')
-  j_is_island = f(1)%Get_Target_Column_Index ('is_island')
-
-  do
-    read(f(1)%unit, '(a)', end=10) line
-    call Get_Strings_From_Line (line, str)
-
-    ! Skip records that contain NAs
-    if (trim(str(j_prec_no)) == 'NA' .or. trim(str(j_block_no)) == 'NA') cycle
-
-    obstry%name = trim(str(j_name))
-    read(str(j_prec_no  ), *) obstry%prec_no
-    read(str(j_block_no ), *) obstry%block_no
-    read(str(j_lat      ), *) obstry%lat
-    read(str(j_lon      ), *) obstry%lon
-    read(str(j_has_ra_mj), *) obstry%has_ra_mj
-    read(str(j_is_island), *) obstry%is_island
-    read(d(1:4),           *) obstry%year
-    read(d(6:7),           *) obstry%mon
-    read(d(9:10),          *) obstry%day
-
-    call obstry%set_url
-    if (n == 1) call obstry%get_html
-    call obstry%get_csv_from_html
-  end do
-  10 close(f(1)%unit)
-end program

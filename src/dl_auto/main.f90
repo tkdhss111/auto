@@ -1,12 +1,20 @@
-! Last Updated: 2019-06-15 17:42:03.
+! Last Updated: 2019-06-16 00:10:32.
 
 program main
 
   use file_mo
-  use config_mo
+  use cli_mo
   use dl_auto_mo
+  use px_mo
+  use license_mo
 
   implicit none
+
+  type(webpage_ty) :: webpage
+  type(cf_ty)      :: cf
+  character(19)    :: date_fr, date_to, mode
+  character(255)   :: cf_nml
+  integer          :: year, mon, day, rd
 
   cmd%title    = 'Program for downloading auto data as HTML'
   cmd%exe      = 'dl_auto'
@@ -14,13 +22,13 @@ program main
   cmd%usage(i) = '====================================================================' ;i=i+1
   cmd%usage(i) = 'Usage: '//trim(cmd%exe)//' [OPTIONS]'                                 ;i=i+1
   cmd%usage(i) = ''                                                                     ;i=i+1
-  cmd%usage(i) = 'Example: '//trim(cmd%exe)//' --config config.nml'                     ;i=i+1
+  cmd%usage(i) = 'Example: '//trim(cmd%exe)//' --cf cf_nml'                             ;i=i+1
   cmd%usage(i) = '                             --date_fr 2016-01-01'                    ;i=i+1
   cmd%usage(i) = '                             --date_to 2017-01-01'                    ;i=i+1
   cmd%usage(i) = '                             --mode "nonexist"'                       ;i=i+1
   cmd%usage(i) = 'Program options:'                                                     ;i=i+1
   cmd%usage(i) = ''                                                                     ;i=i+1
-  cmd%usage(i) = '  --config  followed by path for db-table namelist'                   ;i=i+1
+  cmd%usage(i) = '  --cf      followed by path for db-table namelist'                   ;i=i+1
   cmd%usage(i) = '  --date_fr followed by start date in format as yyyy-mm-dd'           ;i=i+1
   cmd%usage(i) = '  --date_to followed by end   date in format as yyyy-mm-dd'           ;i=i+1
   cmd%usage(i) = '  --mode    followed by donwload mode [default:"nonexist"]'           ;i=i+1
@@ -44,17 +52,28 @@ program main
   cmd%n_usage  = i - 1
 
 #ifdef debug
-  config_nml = '/home/eric/1_Projects/JMA/par/0_com/config.nml'
-  date_fr    = '2019-05-12'
-  date_to    = '2019-05-12'
-  mode       = 'nonexist'
+  cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
+  date_fr = '2019-05-12'
+  date_to = '2019-05-12'
+  mode    = 'nonexist'
+  year    = 2018
+  mon     = 10
+  day     = 31
+  rd      = 2
 #else
-  call cmd%get_args (config_nml, date_fr, date_to, mode)
+  call cmd%get_args (cf_nml, date_fr, date_to, mode)
 #endif
 
-  call read_config (cf, config_nml)
+  call read_config (cf, cf_nml)
+
   call check_license (cf%f_lic)
 
-  call get_html (cf, date_fr, date_to, replace = .true.)
+  call webpage%get_csv_from_html (year     = year,        &
+                                  mon      = mon,         &
+                                  day      = day,         &
+                                  rd       = rd,          &
+                                  place    = cf%place,    &
+                                  dir_html = cf%dir_html, &
+                                  dir_csv  = cf%dir_csv)
 
 end program
