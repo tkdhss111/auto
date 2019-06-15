@@ -1,9 +1,9 @@
-! Last Updated: 2019-06-15 17:04:15.
+! Last Updated: 2019-06-15 17:06:08.
 
 !===========================================================
 ! Auto Race Data Fetcher
 !
-! Created by : Hisashi Takeda, Ph.D., 2018-05-08
+! Created by : Hisashi Takeda, Ph.D., 2018-05-09
 !===========================================================
 
 module fetch_auto_mo
