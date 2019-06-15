@@ -3,7 +3,7 @@
 !===========================================================
 ! Auto Race Data Fetcher
 !
-! Created by : Hisashi Takeda, Ph.D., 2018-05-05
+! Created by : Hisashi Takeda, Ph.D., 2018-05-06
 !===========================================================
 
 module fetch_auto_mo
