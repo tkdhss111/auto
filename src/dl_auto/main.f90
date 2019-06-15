@@ -1,7 +1,9 @@
-! Last Updated: 2019-06-15 17:30:42.
+! Last Updated: 2019-06-15 17:42:03.
 
 program main
 
+  use file_mo
+  use config_mo
   use dl_auto_mo
 
   implicit none
@@ -53,57 +55,6 @@ program main
   call read_config (cf, config_nml)
   call check_license (cf%f_lic)
 
-  call ca%read_calendar (trim(cf%dir_par_com)//'calendar.bin')
-  call construct_sites (sites, file = trim(cf%DIR_PAR_COM)//trim(cf%tb_obstry)//'.csv')
-
-  select case (mode)
-
-    case ("full")
-
-      call get_html (cf, ca, sites, date_fr, date_to, replace = .true.)
-
-    case ("nonexist")
-
-      call get_html (cf, ca, sites, date_fr, date_to, replace = .false.)
-
-    case ("routine")
-
-      do ! Endless loop as daemon
-
-        call ca%get_now
-
-        if (ca%sys%getMinute() == 30) then ! Every hour + 30 minutes 
-
-          if (ca%sys%GetHour() == 0) then ! Every midnight 
-
-            t_7days_ago = ca%sys - timedelta (days = 7)
-
-            call get_html (cf, ca, sites,&
-                               date_fr = t_7days_ago%dateformat(),&
-                               date_to = ca%today,&
-                               replace = .true.)
-          else
-
-            call get_html (cf, ca, sites,& 
-                               date_fr = ca%today,&
-                               date_to = ca%today,&
-                               replace = .true.)
-          end if
-
-        end if
-
-        call sleep(60)
-
-      end do
-
-    case default
-
-      print '(a)', '**********************************************'
-      print '(a)', 'Error: Unrecognized mode choice: '//trim(mode)
-      print '(a)', 'Run program with option -h for help'
-      print '(a)', '**********************************************'
-      stop
-
-  end select
+  call get_html (cf, date_fr, date_to, replace = .true.)
 
 end program

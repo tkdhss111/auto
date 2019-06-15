@@ -1,14 +1,13 @@
-! Last Updated: 2019-06-15 17:27:52.
-
+! Last Updated: 2019-06-15 17:38:56.
 !===========================================================
-! Auto Race Data dler
+! HTML downloader for auto
 !
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-15
 !===========================================================
 
 module dl_auto_mo
 
-  use my_tools_mo
+  use file_mo
   
   implicit none
 
