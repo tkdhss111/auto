@@ -5,8 +5,11 @@
 !
 ! Created by : Hisashi Takeda, Ph.D., 2018-05-05
 !===========================================================
+
 module fetch_auto_mo
+
   use my_tools_mo
+  
   implicit none
 
   type racer_ty
