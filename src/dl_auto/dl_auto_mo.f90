@@ -9,8 +9,11 @@ module dl_auto_mo
 
   use file_mo
   use px_mo
+  use string_helpers
   
   implicit none
+
+  type(datetime), allocatable :: days(:)
 
   type cf_ty
 
@@ -49,6 +52,10 @@ module dl_auto_mo
     character(20)  :: place   = 'NA'
     character(20)  :: weather = 'NA'
     character(20)  :: road    = 'NA' ! Race road condition
+    character(4)   :: year_c  = 'NA'
+    character(2)   :: mon_c   = 'NA'
+    character(2)   :: day_c   = 'NA'
+    character(2)   :: rd_c    = 'NA'
     integer        :: year    = iNA
     integer        :: mon     = iNA
     integer        :: day     = iNA
@@ -74,6 +81,7 @@ module dl_auto_mo
     procedure :: set_url
     procedure :: get_html
     procedure :: get_csv_from_html
+    procedure :: write_csv_files
 
   end type
 
@@ -117,15 +125,15 @@ contains
 
   subroutine construct_days (days, date_fr, date_to)
 
-    type(datetime), intent(inout), allocatable :: days(:)
-    character(*),   intent(in)                 :: date_fr
-    character(*),   intent(in)                 :: date_to
-    type(datetime)                             :: t_fr, t_to
-    integer                                    :: ndays
+    type(datetime), intent(out), allocatable :: days(:)
+    character(*),   intent(in)               :: date_fr
+    character(*),   intent(in)               :: date_to
+    type(datetime)                           :: t_fr, t_to
+    integer                                  :: ndays
 
     t_fr = strptime (date_fr//' 00:00:00', "%Y-%m-%d %H:%M:%S")
     t_to = strptime (date_to//' 00:00:00', "%Y-%m-%d %H:%M:%S")
-    days = datetimeRange(t_fr, t_to, timedelta(days = 7))
+    days = datetimeRange(t_fr, t_to, timedelta(days = 1))
     ndays = size(days)
 
   end subroutine
@@ -135,8 +143,11 @@ contains
     class(webpage_ty), intent(inout) :: this
     integer,           intent(in)    :: year, mon, day, rd
     character(255),    intent(in)    :: place, dir_html, dir_csv
-    character(1000), allocatable     :: lines(:)
+    character(1000), allocatable     :: lines(:), lines_we(:)
+    logical                          :: is_race_open
     integer                          :: i
+
+    is_race_open = .true.
 
     this%year     = year
     this%mon      = mon
@@ -150,67 +161,88 @@ contains
 
     call this%get_html
 
-    call read_html_files (lines, file = trim(this%dir_html)//trim(this%fn_html)//'.html')
+    call read_lines_html (lines, lines_we, is_race_open, &
+      file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html')
 
-    do concurrent ( i = 1:size(lines) )
+    if (.not. is_race_open) return
 
-      call clean_line ( lines(i) )
+    do i = 1, size(lines)
+
+      call clean_line_race_result ( lines(i) )
 
     end do
 
-    call write_csv_files (lines, file = trim(this%dir_csv)//trim(this%fn_csv)//'.csv')
+    do i = 1, size(lines_we)
+
+      call clean_line_race_conditions ( lines_we(i) )
+
+    end do
+
+    call this%write_csv_files (lines, lines_we,&
+      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
 
   end subroutine
 
   subroutine set_url (this)
 
     class(webpage_ty), intent(inout) :: this
-    character(4)                     :: year_c
-    character(2)                     :: mon_c
-    character(2)                     :: day_c
-    character(1)                     :: rd_c
 
-    write(year_c, '(i4.0)') this%year
-    write(mon_c,  '(i2.2)') this%mon
-    write(day_c,  '(i2.2)') this%day
-    write(rd_c,   '(i0)'  ) this%rd
+    write(this%year_c, '(i4.0)') this%year
+    write(this%mon_c,  '(i2.2)') this%mon
+    write(this%day_c,  '(i2.2)') this%day
+    write(this%rd_c,   '(i0)'  ) this%rd
 
     this%url = trim(this%prefix)//trim(this%place)//'/'//&
-               trim(year_c)//'-'//trim(mon_c)//'-'//trim(day_c)//'_'//trim(rd_c)
-
-    print '(a)', 'URL: ', trim(this%url)
+               trim(this%year_c)//'-'//trim(this%mon_c)//'-'//trim(this%day_c)//'_'//trim(this%rd_c)
+#ifdef debug
+    print '(a)', 'URL: '//trim(this%url)
+#endif
 
     write (this%fn_html,&
-      '(i4.0, "-", i2.2, "-", i2.2, "_", i0, "_", a)') &
-      this%year, this%mon, this%day, this%rd, trim(this%place)
+      '(i4.0, "-", i2.2, "-", i2.2, "_", i0)') &
+      this%year, this%mon, this%day, this%rd
+
+    this%fn_csv = this%fn_html
 
   end subroutine
 
   subroutine get_html (this)
 
     class(webpage_ty), intent(inout) :: this
-    character(255)                   :: cmd
+    character(255)                   :: cmd, outfile
+    logical                          :: exist
 
-    print '(a)', 'Downloading htm: ', trim(this%url), ' to ', trim(this%dir_html)
+#ifdef debug
+    print '(a)', 'Downloading htm: '//trim(this%url)//' to '//trim(this%dir_html)
+#endif
 
-    cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(this%dir_html)//&
-          trim(this%fn_html)//'.html"')
+    outfile = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html'
 
+    inquire (file = outfile, exist = exist)
+
+    if (exist) return
+
+    cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(outfile)//'"')
+
+#ifdef debug
     print *, trim(cmd)
+#endif
 
-    call execute_command_line ( 'mkdir -p '//trim(this%dir_html) )
+    call execute_command_line ( 'mkdir -p '//trim(this%dir_html)//trim(this%place)//'/' )
 
     call execute_command_line(cmd)
 
   end subroutine
 
-  subroutine read_html_files (lines, file)
+  subroutine read_lines_html (lines, lines_we, is_race_open, file)
 
-    character(*), allocatable, intent(inout) :: lines(:)
+    character(*), allocatable, intent(inout) :: lines(:), lines_we(:)
     character( len(lines) ), allocatable     :: lines_(:)
     character(*), intent(in)                 :: file
-    logical                                  :: is_table
+    logical,      intent(inout)              :: is_race_open
+    logical                                  :: is_table, is_table_we
     integer                                  :: i_fr, i_to
+    integer                                  :: i_fr_we, i_to_we
     integer                                  :: i, u, nr
 
     print '(a$)', 'Opening a html file: '//trim(file)//' ... '
@@ -223,15 +255,42 @@ contains
 
     allocate ( lines_(nr) )
     
-    i_fr = 1
-    i_to = nr
+    i_fr        = 1
+    i_fr_we     = 1
+    i_to        = nr
+    i_to_we     = nr
+    is_table    = .false.
+    is_table_we = .false.
 
+    !
+    ! Check if race is open
+    !
+    do i = 1, nr
+
+      read (u, '(a)') lines_(i)
+
+      if ( index(lines_(i), '本日の開催情報はありません') > 0 ) then
+
+        print *, 'Skipped since no race on that day'
+        is_race_open = .false.
+
+        return
+
+      end if
+
+    end do
+
+    rewind (u)
+
+    !
+    ! Transaction for race results
+    !
     do i = 1, nr
 
       read (u, '(a)') lines_(i)
 
       ! Begining of table
-      if ( index(lines_(i), '<td class="light f16">') > 0 ) then
+      if ( index(lines_(i), '<td class="light f16">1</td>') > 0 .and. .not. is_table ) then
 
         i_fr = i
 
@@ -240,27 +299,115 @@ contains
       end if
 
       ! End of the table
-      if ( index(lines_(i), '</table>') > 0 .and. is_table) i_to = i - 1
+      if ( index(lines_(i), '</table>') > 0 .and. is_table) then
+
+        i_to = i - 2
+
+        exit
+
+      end if
 
     end do
 
-    close (u)
-
-    allocate ( lines(i_to - i_fr + 1) )
-
     lines = lines_(i_fr:i_to)
+
+    rewind (u)
+
+    !
+    ! Transaction for race conditions 
+    !
+    do i = 1, nr
+
+      read (u, '(a)') lines_(i)
+
+      ! Begining of table
+      if ( index(lines_(i), 'ｍ</td>') > 0 .and. .not. is_table_we ) then
+
+        i_fr_we = i
+
+        is_table_we = .true.
+
+      end if
+
+      ! End of the table
+      if ( index(lines_(i), '</table>') > 0 .and. is_table_we) then
+
+        i_to_we = i - 3
+
+        exit
+
+      end if
+
+    end do
+
+    lines_we = lines_(i_fr_we:i_to_we)
+
+    close (u)
 
     print '(a)', 'done'
 
   end subroutine
 
-  subroutine write_csv_files (lines, file)
+  subroutine clean_line_race_result (line)
 
-    character(*), intent(in) :: lines(:)
-    character(*), intent(in) :: file
-    integer                  :: i, u, nr
+    character(*), intent(inout) :: line
+    integer                     :: i_a_fr, n_to
 
-    print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
+    call string_replace (line, ' class="light f16"',        '')
+    call string_replace (line, ' class="f8"',               '')
+    call string_replace (line, ' class="f16"',              '')
+    call string_replace (line, ' class="td_white_center"',  '')
+    call string_replace (line, ' class="td_black_center"',  '')
+    call string_replace (line, ' class="td_blue_center"',   '')
+    call string_replace (line, ' class="td_orange_center"', '')
+    call string_replace (line, ' class="td_green_center"',  '')
+    call string_replace (line, ' class="td_yellow_center"', '')
+    call string_replace (line, ' class="td_pink_center"',   '')
+    call string_replace (line, ' class="td_red_center"',    '')
+    call string_replace (line, '</a>',                      '')
+    call string_replace (line, '<tr>',                      '')
+    call string_replace (line, '</tr>',                     '')
+    call string_replace (line, '<td></td>',               'NA')
+    call string_replace (line, '<td>',                      '')
+    call string_replace (line, '</td>',                     '')
+    call string_replace (line, '　',                       ' ')
+
+    if (index(line, '<a') > 0) then
+
+      i_a_fr = index(line, '<a')
+      n_to = index(line(i_a_fr:), '>') - 1
+
+      line(1:i_a_fr + n_to) = ''
+      
+    end if
+
+    line = adjustl(line)
+
+  end subroutine
+
+  subroutine clean_line_race_conditions (line)
+
+    character(*), intent(inout) :: line
+
+    call string_replace (line, '<td>',  '')
+    call string_replace (line, '</td>', '')
+    call string_replace (line, 'ｍ',    '')
+    call string_replace (line, '℃',     '')
+    call string_replace (line, '％',    '')
+
+    line = adjustl(line)
+
+  end subroutine
+
+  subroutine write_csv_files (this, lines, lines_we, file)
+
+    class(webpage_ty), intent(inout)     :: this
+    character(*), intent(in)             :: lines(:), lines_we(:)
+    character(*), intent(in)             :: file
+    character( len(lines) ), allocatable :: lines2(:) ! No empty lines
+    integer                              :: i, j, k, u, nr
+
+    !print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
 
     call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
 
@@ -268,104 +415,63 @@ contains
 
     nr = size(lines)
 
-    write (u, FMT_CSV_STR) "race_title", "year", "mon", "day", "rd", "place", "name", "handycup"
+    allocate ( lines2(nr) )
+
+    write (u, FMT_CSV_STR)&
+      "place", "year", "mon", "day", "rd",&
+      "meters_distance", "weather", "tp", "hm", "tp_road", "road",&
+      "rank_goal", "accident", "no_motercycle", "kanji_name_racer",&
+      "name_racer", "name_motercycle", "meters_handycup",&
+      "mins_trial", "mins_race", "mins_start", "violation"
+
+    k = 1
 
     do i = 1, nr
 
-      print '(a)', trim( lines(i) )
+      if ( is_empty( lines(i) )) cycle
 
-      write (u, '(a)') lines(i)
+#ifdef debug
+      print '(a, i3, a, i3, a, i0)', 'Line: ', i, '/', nr, '; '//trim( lines(i) )//', len:', len_trim( lines(i) )
+#endif
+
+      lines2(k) = lines(i)
+
+      k = k + 1
+
+    end do
+
+    nr = size(lines_we)
+
+    do i = 1, nr 
+
+      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr, '; '//trim( lines_we(i) )
+
+    end do
+
+    !
+    ! Write race results and conditions
+    !
+    do i = 1, k - 11, 11
+
+      write (u, '(*(a, :, ","))') &
+        trim( this%place  ),      &
+        trim( this%year_c ),      &
+        trim( this%mon_c  ),      &
+        trim( this%day_c  ),      &
+        trim( this%rd_c   ),      &
+        trim( lines_we(1) ),      &
+        trim( lines_we(2) ),      &
+        trim( lines_we(3) ),      &
+        trim( lines_we(4) ),      &
+        trim( lines_we(5) ),      &
+        trim( lines_we(6) ),      &
+        [(lines2(i + j), j = 0, 10)]
 
     end do
 
     close (u)
 
-    print '(a)', 'done'
-
-  end subroutine
-
-  pure subroutine clean_line (line)
-
-    character(*), intent(inout) :: line
-    character(len(line))        :: line2
-    logical                     :: is_in_blacket, is_j_block_nolocked(5000)
-    integer                     :: i_fr, i_to
-    integer                     :: i, k
-
-    is_in_blacket       = .false.
-    is_j_block_nolocked = .false.
-
-    i_fr = 0
-    i_to = 0
-
-    line2 = ''
-
-    call string_replace (line, ' class="light f16"',        '')
-    call string_replace (line, ' class="f16"',              '')
-    call string_replace (line, ' class="td_blue_center"',   '')
-    call string_replace (line, ' class="td_orange_center"', '')
-
-    line = line( index(line, '<td'):index(line, '</td>', back = .true.) - 1 ) ! Omit <tr> tags
-
-    i_fr = index(line, 'alt') + 5
-
-    if (i_fr > 5) then
-
-      i_to = i_fr + index(line(i_fr:), '"') - 2
-
-      is_j_block_nolocked(i_fr:i_to) = .true.
-
-      !print *, 'Word: ', line(i_fr:i_to), ' has been blocked.'
-
-    end if
-
-    !
-    ! Letter by letter process: delete unwanted letters
-    !
-    do i = 1, len_trim(line)
-
-      if (line(i:i) == '<') then
-
-        is_in_blacket = .true.
-
-      end if
-
-      if (line(i:i) == '>') then
-
-        is_in_blacket = .false.
-
-        line(i:i) = ''
-
-      end if
-
-      if (line(i:i+2) == '/td') then
-
-        line(i-1:i-1) = ','
-
-      end if
-
-      if (is_in_blacket .and. line(i:i) /= ',' .and. .not. is_j_block_nolocked(i)) then
-
-        line(i:i) = ''
-
-      end if
-
-    end do
-
-    !
-    ! Delete white space in the line
-    !
-    k = 1
-
-    do i = 1, len(line)
-
-      if (line(i:i) == ' ') cycle
-
-      line2(k:k) = line(i:i)
-
-      k = k + 1
-
-    end do
+    !print '(a)', 'done'
 
   end subroutine
 

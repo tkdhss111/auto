@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-16 00:10:32.
+! Last Updated: 2019-06-16 23:13:05.
 
 program main
 
@@ -53,8 +53,8 @@ program main
 
 #ifdef debug
   cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
-  date_fr = '2019-05-12'
-  date_to = '2019-05-12'
+  date_fr = '2019-01-02'
+  date_to = '2019-01-02'
   mode    = 'nonexist'
   year    = 2018
   mon     = 10
@@ -68,12 +68,22 @@ program main
 
   call check_license (cf%f_lic)
 
-  call webpage%get_csv_from_html (year     = year,        &
-                                  mon      = mon,         &
-                                  day      = day,         &
-                                  rd       = rd,          &
-                                  place    = cf%place,    &
-                                  dir_html = cf%dir_html, &
-                                  dir_csv  = cf%dir_csv)
+  call construct_days (days, date_fr, date_to)
+
+  do i = 1, size(days)
+
+    do rd = 1, 1
+
+      call webpage%get_csv_from_html (year     = days(i)%getYear(),  &
+                                      mon      = days(i)%getMonth(), &
+                                      day      = days(i)%getDay(),   &
+                                      rd       = rd,                 &
+                                      place    = cf%place,           &
+                                      dir_html = cf%dir_html,        &
+                                      dir_csv  = cf%dir_csv)
+
+    end do
+
+  end do
 
 end program
