@@ -143,7 +143,7 @@ contains
     class(webpage_ty), intent(inout) :: this
     integer,           intent(in)    :: year, mon, day, rd
     character(255),    intent(in)    :: place, dir_html, dir_csv
-    character(1000), allocatable     :: lines(:), lines_we(:)
+    character(1000), allocatable     :: lines(:), lines_we(:), lines_rank(:)
     logical                          :: is_race_open
     integer                          :: i
 
@@ -161,16 +161,18 @@ contains
 
     call this%get_html
 
-    call read_lines_html (lines, lines_we, is_race_open, &
+    call read_lines_html (lines, lines_we, lines_rank, is_race_open, &
       file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html')
 
-    if (.not. is_race_open) return
+    if (.not. is_race_open) then
 
-    do i = 1, size(lines)
+      print *, 'Skipped since no race' 
 
-      call clean_line_race_result ( lines(i) )
+      return
 
-    end do
+    end if
+
+    print '(a$)', 'Cleaning data of race conditions ... '
 
     do i = 1, size(lines_we)
 
@@ -178,7 +180,29 @@ contains
 
     end do
 
-    call this%write_csv_files (lines, lines_we,&
+    print '(a)', 'done'
+
+    print '(a$)', 'Cleaning data of race results ... ' 
+
+    do i = 1, size(lines)
+
+      call clean_line_race_result ( lines(i) )
+
+    end do
+
+    print '(a)', 'done'
+
+    print '(a$)', 'Cleaning data of rank of run ... ' 
+
+    do i = 1, size(lines_rank)
+
+      call clean_line_rank_run ( lines_rank(i) )
+
+    end do
+
+    print '(a)', 'done'
+
+    call this%write_csv_files (lines, lines_we, lines_rank,&
       file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
 
   end subroutine
@@ -232,17 +256,20 @@ contains
 
     call execute_command_line(cmd)
 
+    call sleep ( int( rand() * 3 ) )
+
   end subroutine
 
-  subroutine read_lines_html (lines, lines_we, is_race_open, file)
+  subroutine read_lines_html (lines, lines_we, lines_rank, is_race_open, file)
 
-    character(*), allocatable, intent(inout) :: lines(:), lines_we(:)
+    character(*), allocatable, intent(inout) :: lines(:), lines_we(:), lines_rank(:)
     character( len(lines) ), allocatable     :: lines_(:)
     character(*), intent(in)                 :: file
     logical,      intent(inout)              :: is_race_open
-    logical                                  :: is_table, is_table_we
+    logical                                  :: is_table, is_table_we, is_table_rank
     integer                                  :: i_fr, i_to
     integer                                  :: i_fr_we, i_to_we
+    integer                                  :: i_fr_rank, i_to_rank
     integer                                  :: i, u, nr
 
     print '(a$)', 'Opening a html file: '//trim(file)//' ... '
@@ -255,12 +282,15 @@ contains
 
     allocate ( lines_(nr) )
     
-    i_fr        = 1
-    i_fr_we     = 1
-    i_to        = nr
-    i_to_we     = nr
-    is_table    = .false.
-    is_table_we = .false.
+    i_fr          = 1
+    i_fr_we       = 1
+    i_fr_rank     = 1
+    i_to          = nr
+    i_to_we       = nr
+    i_to_rank     = nr
+    is_table      = .false.
+    is_table_we   = .false.
+    is_table_rank = .false.
 
     !
     ! Check if race is open
@@ -272,7 +302,10 @@ contains
       if ( index(lines_(i), '本日の開催情報はありません') > 0 ) then
 
         print *, 'Skipped since no race on that day'
+
         is_race_open = .false.
+
+        close (u)
 
         return
 
@@ -285,6 +318,8 @@ contains
     !
     ! Transaction for race results
     !
+    lines_ = ''
+
     do i = 1, nr
 
       read (u, '(a)') lines_(i)
@@ -311,11 +346,14 @@ contains
 
     lines = lines_(i_fr:i_to)
 
-    rewind (u)
 
     !
     ! Transaction for race conditions 
     !
+    rewind (u)
+
+    lines_ = ''
+
     do i = 1, nr
 
       read (u, '(a)') lines_(i)
@@ -342,9 +380,57 @@ contains
 
     lines_we = lines_(i_fr_we:i_to_we)
 
+
+    !
+    ! Transaction for rank of run 
+    !
+    rewind (u)
+
+    lines_ = ''
+
+    do i = 1, nr
+
+      read (u, '(a)') lines_(i)
+
+      ! Begining of table
+      if ( index(lines_(i), 'ゴール線通過') > 0 .and. .not. is_table_rank ) then
+
+        i_fr_rank = i + 1
+
+        is_table_rank = .true.
+
+      end if
+
+      ! End of the table
+      if ( index(lines_(i), '</table>') > 0 .and. is_table_rank) then
+
+        i_to_rank = i - 3
+
+        exit
+
+      end if
+
+    end do
+
+    lines_rank = lines_(i_fr_rank:i_to_rank)
+
     close (u)
 
     print '(a)', 'done'
+
+  end subroutine
+
+  subroutine clean_line_race_conditions (line)
+
+    character(*), intent(inout) :: line
+
+    call string_replace (line, '<td>',  '')
+    call string_replace (line, '</td>', '')
+    call string_replace (line, 'ｍ',    '')
+    call string_replace (line, '℃',     '')
+    call string_replace (line, '％',    '')
+
+    line = adjustl(line)
 
   end subroutine
 
@@ -367,10 +453,11 @@ contains
     call string_replace (line, '</a>',                      '')
     call string_replace (line, '<tr>',                      '')
     call string_replace (line, '</tr>',                     '')
-    call string_replace (line, '<td></td>',               'NA')
+    call string_replace (line, '<td></td>',                '-')
     call string_replace (line, '<td>',                      '')
     call string_replace (line, '</td>',                     '')
     call string_replace (line, '　',                       ' ')
+    call string_replace (line, achar(9),                    '')
 
     if (index(line, '<a') > 0) then
 
@@ -385,37 +472,49 @@ contains
 
   end subroutine
 
-  subroutine clean_line_race_conditions (line)
+  subroutine clean_line_rank_run (line)
 
     character(*), intent(inout) :: line
 
+    call string_replace (line, '<td class="td_orange_center">', '')
+    call string_replace (line, '<td class="td_blue_center">',   '')
+    call string_replace (line, '<td class="td_black_center">',  '')
+    call string_replace (line, '<td class="td_yellow_center">', '')
+    call string_replace (line, '<td class="td_green_center">',  '')
+    call string_replace (line, '<td class="td_red_center">',    '')
+    call string_replace (line, '<td class="td_white_center">',  '')
+    call string_replace (line, '<td class="td_pink_center">',   '')
+    call string_replace (line, '<tr class="td_white_center">',        '')
+    call string_replace (line, '<td class="light txtArea">1周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">2周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">3周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">4周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">5周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">6周回</td>', '')
+    call string_replace (line, '</tr>', '')
     call string_replace (line, '<td>',  '')
     call string_replace (line, '</td>', '')
-    call string_replace (line, 'ｍ',    '')
-    call string_replace (line, '℃',     '')
-    call string_replace (line, '％',    '')
 
     line = adjustl(line)
 
   end subroutine
 
-  subroutine write_csv_files (this, lines, lines_we, file)
+  subroutine write_csv_files (this, lines, lines_we, lines_rank, file)
 
     class(webpage_ty), intent(inout)     :: this
-    character(*), intent(in)             :: lines(:), lines_we(:)
+    character(*), intent(in)             :: lines(:), lines_we(:), lines_rank(:)
     character(*), intent(in)             :: file
     character( len(lines) ), allocatable :: lines2(:) ! No empty lines
+    integer :: no_rank_run(8, 7) ! Rows: rank,   Colums: run, Value: # bike
+    integer :: rank_no_run(8, 7) ! Rows: # bike, Colums: run, Value: rank
     integer                              :: i, j, k, u, nr
+    integer                              :: m, n
 
-    !print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
+    print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
 
     call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
 
     open (newunit = u, file = file, status = 'replace')
-
-    nr = size(lines)
-
-    allocate ( lines2(nr) )
 
     write (u, FMT_CSV_STR)&
       "place", "year", "mon", "day", "rd",&
@@ -424,6 +523,24 @@ contains
       "name_racer", "name_motercycle", "meters_handycup",&
       "mins_trial", "mins_race", "mins_start", "violation"
 
+    !
+    ! Race conditions
+    !
+    nr = size(lines_we)
+
+    do i = 1, nr 
+
+!      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr, '; '//trim( lines_we(i) )
+
+    end do
+
+    !
+    ! Race results
+    !
+    nr = size(lines)
+
+    allocate ( lines2(nr) )
+
     k = 1
 
     do i = 1, nr
@@ -431,7 +548,8 @@ contains
       if ( is_empty( lines(i) )) cycle
 
 #ifdef debug
-      print '(a, i3, a, i3, a, i0)', 'Line: ', i, '/', nr, '; '//trim( lines(i) )//', len:', len_trim( lines(i) )
+!      print '(a, i3, a, i3, a, i0)', 'Line: ', i, '/', nr,&
+!        '; '//trim( lines(i) )//', len:', len_trim( lines(i) )
 #endif
 
       lines2(k) = lines(i)
@@ -440,13 +558,47 @@ contains
 
     end do
 
-    nr = size(lines_we)
+    !
+    ! Rank of run 
+    !
+    nr = size(lines_rank)
 
-    do i = 1, nr 
+    k = 1
+    m = 1
+    n = 1
 
-      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr, '; '//trim( lines_we(i) )
+    do i = 1, nr
+
+      if ( is_empty( lines_rank(i) )) cycle
+
+      read (lines_rank(i), *) no_rank_run(m, 8 - n) 
+
+      m = m + 1
+
+      if (m > 8) then
+        m = 1
+        n = n + 1
+      end if
 
     end do
+
+    do m = 1, 8 ! Rank
+
+      do n = 1, 7 ! Run
+
+        rank_no_run( no_rank_run(m, n), n ) = m
+
+      end do
+
+    end do
+
+#ifdef debug
+    do k = 1, 8
+
+      print '(a, i1, a, 7i3)', '# bike: ', k, ', Ranks: ', rank_no_run(k, :)
+
+    end do
+#endif
 
     !
     ! Write race results and conditions
@@ -471,7 +623,7 @@ contains
 
     close (u)
 
-    !print '(a)', 'done'
+    print '(a)', 'done'
 
   end subroutine
 

@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-16 23:13:05.
+! Last Updated: 2019-06-18 20:05:25.
 
 program main
 
@@ -14,7 +14,7 @@ program main
   type(cf_ty)      :: cf
   character(19)    :: date_fr, date_to, mode
   character(255)   :: cf_nml
-  integer          :: year, mon, day, rd
+  integer          :: rd
 
   cmd%title    = 'Program for downloading auto data as HTML'
   cmd%exe      = 'dl_auto'
@@ -56,10 +56,6 @@ program main
   date_fr = '2019-01-02'
   date_to = '2019-01-02'
   mode    = 'nonexist'
-  year    = 2018
-  mon     = 10
-  day     = 31
-  rd      = 2
 #else
   call cmd%get_args (cf_nml, date_fr, date_to, mode)
 #endif
@@ -72,7 +68,7 @@ program main
 
   do i = 1, size(days)
 
-    do rd = 1, 1
+    do rd = 1, 12
 
       call webpage%get_csv_from_html (year     = days(i)%getYear(),  &
                                       mon      = days(i)%getMonth(), &
@@ -81,7 +77,6 @@ program main
                                       place    = cf%place,           &
                                       dir_html = cf%dir_html,        &
                                       dir_csv  = cf%dir_csv)
-
     end do
 
   end do
