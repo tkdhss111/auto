@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-18 20:05:25.
+! Last Updated: 2019-06-22 21:38:14.
 
 program main
 
@@ -53,8 +53,8 @@ program main
 
 #ifdef debug
   cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
-  date_fr = '2019-01-02'
-  date_to = '2019-01-02'
+  date_fr = '2006-10-13'
+  date_to = '2006-10-13'
   mode    = 'nonexist'
 #else
   call cmd%get_args (cf_nml, date_fr, date_to, mode)

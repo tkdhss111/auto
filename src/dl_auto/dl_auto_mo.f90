@@ -13,6 +13,10 @@ module dl_auto_mo
   
   implicit none
 
+  integer, parameter :: NRCRS      = 8   ! Number of racers
+  integer, parameter :: METERS_RUN = 400 ! Distance of a sigle run in meters
+  integer, parameter :: METERS_ADD = 300 ! Additional distance in meters
+
   type(datetime), allocatable :: days(:)
 
   type cf_ty
@@ -48,22 +52,18 @@ module dl_auto_mo
 
   type race_ty
 
-    character(20)  :: title   = 'NA'
-    character(20)  :: place   = 'NA'
-    character(20)  :: weather = 'NA'
-    character(20)  :: road    = 'NA' ! Race road condition
-    character(4)   :: year_c  = 'NA'
-    character(2)   :: mon_c   = 'NA'
-    character(2)   :: day_c   = 'NA'
-    character(2)   :: rd_c    = 'NA'
-    integer        :: year    = iNA
-    integer        :: mon     = iNA
-    integer        :: day     = iNA
-    integer        :: rd      = iNA ! Race round
-    integer        :: dist    = iNA ! Distance of the race
-    real(8)        :: tp      = NA
-    real(8)        :: tp_road = NA
-    real(8)        :: hm      = NA
+    type(datetime) :: t
+    character(20)  :: title    = 'NA'
+    character(20)  :: place    = 'NA'
+    character(20)  :: accident = 'NA'
+    character(20)  :: weather  = 'NA'
+    character(20)  :: road     = 'NA' ! Race road condition
+    character(2)   :: rd_c     = 'NA'
+    integer        :: rd       = iNA ! Race round
+    integer        :: meters   = iNA ! Distance of the race
+    real(8)        :: tp       = NA
+    real(8)        :: tp_road  = NA
+    real(8)        :: hm       = NA
 
   end type
 
@@ -149,9 +149,7 @@ contains
 
     is_race_open = .true.
 
-    this%year     = year
-    this%mon      = mon
-    this%day      = day
+    this%t        = datetime(year = year, month = mon, day = day)
     this%rd       = rd
     this%place    = trim(place)
     this%dir_html = trim(dir_html)
@@ -211,21 +209,16 @@ contains
 
     class(webpage_ty), intent(inout) :: this
 
-    write(this%year_c, '(i4.0)') this%year
-    write(this%mon_c,  '(i2.2)') this%mon
-    write(this%day_c,  '(i2.2)') this%day
-    write(this%rd_c,   '(i0)'  ) this%rd
+    write(this%rd_c, '(i0)') this%rd
 
-    this%url = trim(this%prefix)//trim(this%place)//'/'//&
-               trim(this%year_c)//'-'//trim(this%mon_c)//'-'//trim(this%day_c)//'_'//trim(this%rd_c)
+    write (this%fn_html, '(a)') trim(this%t%strftime('%Y-%m-%d'))//'_'//trim(this%rd_c)
+
 #ifdef debug
     print '(a)', 'URL: '//trim(this%url)
 #endif
 
-    write (this%fn_html,&
-      '(i4.0, "-", i2.2, "-", i2.2, "_", i0)') &
-      this%year, this%mon, this%day, this%rd
-
+    this%url = trim(this%prefix)//trim(this%place)//'/'//trim(this%fn_html)
+    
     this%fn_csv = this%fn_html
 
   end subroutine
@@ -237,14 +230,20 @@ contains
     logical                          :: exist
 
 #ifdef debug
-    print '(a)', 'Downloading htm: '//trim(this%url)//' to '//trim(this%dir_html)
+    print '(a$)', 'Downloading htm: '//trim(this%url)//' ... '
 #endif
 
     outfile = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html'
 
     inquire (file = outfile, exist = exist)
 
-    if (exist) return
+    if (exist) then
+
+      print '(a)', 'skipped' ! Since the HTML file already exists
+
+      return
+
+    end if
 
     cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(outfile)//'"')
 
@@ -255,6 +254,8 @@ contains
     call execute_command_line ( 'mkdir -p '//trim(this%dir_html)//trim(this%place)//'/' )
 
     call execute_command_line(cmd)
+
+    print '(a)', 'done'
 
     call sleep ( int( rand() * 3 ) )
 
@@ -313,40 +314,6 @@ contains
 
     end do
 
-    rewind (u)
-
-    !
-    ! Transaction for race results
-    !
-    lines_ = ''
-
-    do i = 1, nr
-
-      read (u, '(a)') lines_(i)
-
-      ! Begining of table
-      if ( index(lines_(i), '<td class="light f16">1</td>') > 0 .and. .not. is_table ) then
-
-        i_fr = i
-
-        is_table = .true.
-
-      end if
-
-      ! End of the table
-      if ( index(lines_(i), '</table>') > 0 .and. is_table) then
-
-        i_to = i - 2
-
-        exit
-
-      end if
-
-    end do
-
-    lines = lines_(i_fr:i_to)
-
-
     !
     ! Transaction for race conditions 
     !
@@ -379,6 +346,39 @@ contains
     end do
 
     lines_we = lines_(i_fr_we:i_to_we)
+
+    !
+    ! Transaction for race results
+    !
+    rewind (u)
+
+    lines_ = ''
+
+    do i = 1, nr
+
+      read (u, '(a)') lines_(i)
+
+      ! Begining of table
+      if ( index(lines_(i), '<td class="light f16">1</td>') > 0 .and. .not. is_table ) then
+
+        i_fr = i
+
+        is_table = .true.
+
+      end if
+
+      ! End of the table
+      if ( index(lines_(i), '</table>') > 0 .and. is_table) then
+
+        i_to = i - 3
+
+        exit
+
+      end if
+
+    end do
+
+    lines = lines_(i_fr:i_to)
 
 
     !
@@ -437,7 +437,7 @@ contains
   subroutine clean_line_race_result (line)
 
     character(*), intent(inout) :: line
-    integer                     :: i_a_fr, n_to
+    integer                     :: i_a_fr, i_a_to
 
     call string_replace (line, ' class="light f16"',        '')
     call string_replace (line, ' class="f8"',               '')
@@ -450,7 +450,8 @@ contains
     call string_replace (line, ' class="td_yellow_center"', '')
     call string_replace (line, ' class="td_pink_center"',   '')
     call string_replace (line, ' class="td_red_center"',    '')
-    call string_replace (line, '</a>',                      '')
+    call string_replace (line, '<font class="bold" color="red">再</font>', '')
+    call string_replace (line, '－',                      'NA')
     call string_replace (line, '<tr>',                      '')
     call string_replace (line, '</tr>',                     '')
     call string_replace (line, '<td></td>',                '-')
@@ -462,11 +463,15 @@ contains
     if (index(line, '<a') > 0) then
 
       i_a_fr = index(line, '<a')
-      n_to = index(line(i_a_fr:), '>') - 1
+      i_a_to = index(line, '>')
 
-      line(1:i_a_fr + n_to) = ''
-      
+      line = line(1:i_a_fr + 1)//line( i_a_to:len_trim(line) )
+
     end if
+
+    call string_replace (line, '<a></a>', 'NA')
+    call string_replace (line, '<a>',  '')
+    call string_replace (line, '</a>', '')
 
     line = adjustl(line)
 
@@ -491,6 +496,9 @@ contains
     call string_replace (line, '<td class="light txtArea">4周回</td>', '')
     call string_replace (line, '<td class="light txtArea">5周回</td>', '')
     call string_replace (line, '<td class="light txtArea">6周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">7周回</td>', '')
+    call string_replace (line, '<td class="light txtArea">8周回</td>', '')
+    call string_replace (line, '<td class=""></td>', '8')
     call string_replace (line, '</tr>', '')
     call string_replace (line, '<td>',  '')
     call string_replace (line, '</td>', '')
@@ -502,13 +510,22 @@ contains
   subroutine write_csv_files (this, lines, lines_we, lines_rank, file)
 
     class(webpage_ty), intent(inout)     :: this
-    character(*), intent(in)             :: lines(:), lines_we(:), lines_rank(:)
-    character(*), intent(in)             :: file
+    character(*),      intent(in)        :: lines(:), lines_we(:), lines_rank(:)
+    character(*),      intent(in)        :: file
     character( len(lines) ), allocatable :: lines2(:) ! No empty lines
-    integer :: no_rank_run(8, 7) ! Rows: rank,   Colums: run, Value: # bike
-    integer :: rank_no_run(8, 7) ! Rows: # bike, Colums: run, Value: rank
-    integer                              :: i, j, k, u, nr
-    integer                              :: m, n
+    character(1), allocatable            :: ranks_c(:, :)
+    character(9), allocatable            :: ranks_run(:)
+    integer                              :: bike(NRCRS)
+    integer, allocatable                 :: no_rank_run(:, :) ! Value: # bike
+    integer, allocatable                 :: rank_no_run(:, :) ! Value: rank
+    integer                              :: i, j, k, u, nr, nr2
+    integer                              :: rank, run, nruns
+
+    read (lines_we(1), '(i4)') this%meters
+    nruns = (this%meters - METERS_ADD) / METERS_RUN 
+
+    allocate ( ranks_c(NRCRS, nruns), no_rank_run(NRCRS, nruns), rank_no_run(NRCRS, nruns) )
+    allocate ( ranks_run(nruns) )
 
     print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
 
@@ -516,23 +533,33 @@ contains
 
     open (newunit = u, file = file, status = 'replace')
 
+    do i = 1, nruns
+
+      write ( ranks_run(i), '(a8,  i1)' ) 'rank_run',  i
+
+    end do
+
     write (u, FMT_CSV_STR)&
-      "place", "year", "mon", "day", "rd",&
-      "meters_distance", "weather", "tp", "hm", "tp_road", "road",&
-      "rank_goal", "accident", "no_motercycle", "kanji_name_racer",&
-      "name_racer", "name_motercycle", "meters_handycup",&
-      "mins_trial", "mins_race", "mins_start", "violation"
+      "place", "date", "rd", "meters_distance", "weather", "tp", "hm", "tp_road", "road", &
+      "accident", "bike", "kanji_name_racer", &
+      "name_racer", "name_bike", "meters_handycup", &
+      "mins_trial", "mins_race", "mins_start", "violation", &
+      ranks_run
 
     !
     ! Race conditions
     !
+#ifdef debug
     nr = size(lines_we)
 
-    do i = 1, nr 
+    print *, ''
 
-!      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr, '; '//trim( lines_we(i) )
+    do i = 1, nr
+
+      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr, '; '//trim( lines_we(i) )
 
     end do
+#endif
 
     !
     ! Race results
@@ -547,77 +574,154 @@ contains
 
       if ( is_empty( lines(i) )) cycle
 
-#ifdef debug
-!      print '(a, i3, a, i3, a, i0)', 'Line: ', i, '/', nr,&
-!        '; '//trim( lines(i) )//', len:', len_trim( lines(i) )
-#endif
-
       lines2(k) = lines(i)
 
       k = k + 1
 
     end do
 
+#ifdef debug
+
+    nr2 = k - 1
+
+    print *, ''
+
+    do i = 1, nr2
+
+      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr2, '; '//trim( lines2(i) )
+
+    end do
+#endif
+
     !
     ! Rank of run 
     !
     nr = size(lines_rank)
 
-    k = 1
-    m = 1
-    n = 1
+    k    = 1
+    rank = 1
+    run  = 1
 
     do i = 1, nr
 
       if ( is_empty( lines_rank(i) )) cycle
 
-      read (lines_rank(i), *) no_rank_run(m, 8 - n) 
+!      print '(a$)', 'lines_rank: '//trim( lines_rank(i) )
 
-      m = m + 1
+      read (lines_rank(i), '(i1)') no_rank_run(rank, NRUNS - run + 1) 
 
-      if (m > 8) then
-        m = 1
-        n = n + 1
+!      print '(a, i1)', '; no_rank_run: ', no_rank_run(rank, NRUNS - run + 1)
+
+      rank = rank + 1
+
+      if (rank > NRCRS) then
+
+        rank = 1
+
+        run  = run + 1
+
       end if
 
     end do
 
-    do m = 1, 8 ! Rank
+    do rank = 1, NRCRS
 
-      do n = 1, 7 ! Run
+      do run = 1, NRUNS
 
-        rank_no_run( no_rank_run(m, n), n ) = m
+        rank_no_run( no_rank_run(rank, run), run ) = rank
 
       end do
 
     end do
 
 #ifdef debug
-    do k = 1, 8
+    print '(a)',  '-----------------------------------------------------------'
+    print '(a, *(i1, :, "    "))', '           Run: ', [(i, i = 1, NRUNS)]
+    print '(a)',  '-----------------------------------------------------------'
 
-      print '(a, i1, a, 7i3)', '# bike: ', k, ', Ranks: ', rank_no_run(k, :)
+    do i = 1, NRCRS 
+
+      print '(a, i1, a, *(i1, :, " -> "))', 'Bike: ', i, ', Ranks: ', rank_no_run(i, :)
 
     end do
 #endif
 
     !
+    ! Check if accidents occured.
+    ! If so, skip writing the CSV file.
+    !
+    do i = 2, 88, 11
+
+      if ( index (lines2(i), '-') > 0 ) cycle 
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, trim( lines2(i) )//' occured and this race has been skipped.'
+      print *, '***********************************************************'
+
+      return
+
+    end do
+
+    !
+    ! Get motercycle(bike) number
+    !
+    k = 1
+
+    print *, ''
+
+    do i = 3, 88, 11
+
+      if (.not. is_numeric(lines2(i)) ) stop trim( lines2(i) )//' is NaN'
+
+      read ( lines2(i), * ) bike(k)
+
+!      print *, 'bike: ',  bike(k)
+
+      k = k + 1
+
+    end do
+
+    ! Convert integer to character for CSV writing
+    do run = 1, NRUNS
+
+      do i = 1, NRCRS
+
+!        print *, 'Bike: ', bike(i), 'Run: ', run, 'Rank: ', rank_no_run(bike(i), run)
+
+        write ( ranks_c(i, run), '(i1)' ) rank_no_run( bike(i), run )
+
+      end do
+
+    end do
+
+    do i = 1, NRCRS
+
+      print '(a, i1, a, *(a, :, " -> "))', 'Racer: ', i, ', Rank: ', ranks_c(i, :)
+
+    end do
+
+    !
     ! Write race results and conditions
     !
-    do i = 1, k - 11, 11
+    k = 1
 
-      write (u, '(*(a, :, ","))') &
-        trim( this%place  ),      &
-        trim( this%year_c ),      &
-        trim( this%mon_c  ),      &
-        trim( this%day_c  ),      &
-        trim( this%rd_c   ),      &
-        trim( lines_we(1) ),      &
-        trim( lines_we(2) ),      &
-        trim( lines_we(3) ),      &
-        trim( lines_we(4) ),      &
-        trim( lines_we(5) ),      &
-        trim( lines_we(6) ),      &
-        [(lines2(i + j), j = 0, 10)]
+    do i = 1, nr2, 11
+
+      write (u, '(*(a, :, ","))')   &
+        trim( this%place  ),        & ! Place
+        trim( this%t%dateformat()), & ! Date
+        trim( this%rd_c   ),        & ! Round
+        trim( lines_we(1) ),        & ! Distance in meters 
+        trim( lines_we(2) ),        & ! Weather condition
+        trim( lines_we(3) ),        & ! Temperature
+        trim( lines_we(4) ),        & ! Humidity
+        trim( lines_we(5) ),        & ! Temperature of road
+        trim( lines_we(6) ),        & ! Road condition
+        [(lines2(i + j), j = 1, 10)], &  ! accident, bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
+        ranks_c(k, :)
+
+      k = k + 1
 
     end do
 
