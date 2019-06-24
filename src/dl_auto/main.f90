@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-22 21:38:14.
+! Last Updated: 2019-06-24 11:00:21.
 
 program main
 
@@ -53,8 +53,8 @@ program main
 
 #ifdef debug
   cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
-  date_fr = '2006-10-13'
-  date_to = '2006-10-13'
+  date_fr = '2008-12-30'
+  date_to = '2008-12-30'
   mode    = 'nonexist'
 #else
   call cmd%get_args (cf_nml, date_fr, date_to, mode)
@@ -70,6 +70,8 @@ program main
 
     do rd = 1, 12
 
+      call print_title
+
       call webpage%get_csv_from_html (year     = days(i)%getYear(),  &
                                       mon      = days(i)%getMonth(), &
                                       day      = days(i)%getDay(),   &
@@ -80,5 +82,16 @@ program main
     end do
 
   end do
+
+  contains
+    
+    subroutine print_title
+
+      print *, ''
+      print '(a)', repeat('=', 80)
+      print '(a, i2)', 'Day: '//days(i)%dateformat()//', Round: ', rd
+      print '(a)', repeat('=', 80)
+
+    end subroutine
 
 end program

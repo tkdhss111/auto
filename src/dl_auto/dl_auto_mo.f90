@@ -9,13 +9,11 @@ module dl_auto_mo
 
   use file_mo
   use px_mo
-  use string_helpers
   
   implicit none
 
-  integer, parameter :: NRCRS      = 8   ! Number of racers
-  integer, parameter :: METERS_RUN = 400 ! Distance of a sigle run in meters
-  integer, parameter :: METERS_ADD = 300 ! Additional distance in meters
+  integer, parameter :: METERS_LAP = 500 ! Distance of a sigle lap in meters
+  integer, parameter :: METERS_ADD = 100 ! Additional distance in meters
 
   type(datetime), allocatable :: days(:)
 
@@ -52,18 +50,25 @@ module dl_auto_mo
 
   type race_ty
 
-    type(datetime) :: t
-    character(20)  :: title    = 'NA'
-    character(20)  :: place    = 'NA'
-    character(20)  :: accident = 'NA'
-    character(20)  :: weather  = 'NA'
-    character(20)  :: road     = 'NA' ! Race road condition
-    character(2)   :: rd_c     = 'NA'
-    integer        :: rd       = iNA ! Race round
-    integer        :: meters   = iNA ! Distance of the race
-    real(8)        :: tp       = NA
-    real(8)        :: tp_road  = NA
-    real(8)        :: hm       = NA
+    type(datetime)              :: t
+    type(racer_ty), allocatable :: rcrs(:)
+    integer                     :: nrcrs    = iNA
+    integer                     :: nlaps    = iNA
+    character(20)               :: title    = 'NA'
+    character(20)               :: place    = 'NA'
+    character(20)               :: accident = 'NA'
+    character(20)               :: weather  = 'NA'
+    character(20)               :: road     = 'NA' ! Race road condition
+    character(2)                :: rd_c     = 'NA'
+    integer                     :: rd       = iNA ! Race round
+    integer                     :: meters   = iNA ! Distance of the race
+    real(8)                     :: tp       = NA
+    real(8)                     :: tp_road  = NA
+    real(8)                     :: hm       = NA
+
+    contains
+
+    procedure :: construct_race
 
   end type
 
@@ -85,58 +90,80 @@ module dl_auto_mo
 
   end type
 
+  !
+  ! Interface for submodule: init_smo.f90
+  !
+  interface read_config 
+    module subroutine read_config (cf, cf_nml, is_print)
+      type(cf_ty)                   :: cf
+      character(*), intent(in)      :: cf_nml
+      logical, intent(in), optional :: is_print
+    end subroutine
+  end interface
+
+  interface construct_days 
+    module subroutine construct_days (days, date_fr, date_to)
+      type(datetime), intent(out), allocatable :: days(:)
+      character(*),   intent(in)               :: date_fr
+      character(*),   intent(in)               :: date_to
+    end subroutine
+  end interface
+
+  !
+  ! Interface for submodule: set_get_url.f90
+  !
+  interface set_url 
+    module subroutine set_url (this)
+      class(webpage_ty), intent(inout) :: this
+    end subroutine
+  end interface
+
+  interface get_html 
+    module subroutine get_html (this)
+      class(webpage_ty), intent(inout) :: this
+    end subroutine
+  end interface
+
+  !
+  ! Interface for submodule: clean_lines_smo.f90
+  !
+  interface clean_line_race_conditions
+    module subroutine clean_line_race_conditions (line)
+      character(*), intent(inout) :: line
+    end subroutine
+  end interface
+
+  interface clean_line_race_result
+    module subroutine clean_line_race_result (line)
+      character(*), intent(inout) :: line
+    end subroutine
+  end interface
+
+  interface clean_line_rank_lap
+    module subroutine clean_line_rank_lap (line)
+      character(*), intent(inout) :: line
+    end subroutine
+  end interface
+
+  !
+  ! Interface for submodule: extract_tables_smo.f90
+  !
+  interface extract_tables
+    module subroutine extract_tables (lines, lines_we, lines_rank, is_race_ok, file)
+      character(*), intent(inout), allocatable :: lines(:), lines_we(:), lines_rank(:)
+      logical,      intent(inout)              :: is_race_ok
+      character(*), intent(in)                 :: file
+    end subroutine
+  end interface
+  
+  interface construct_race
+    module subroutine construct_race (this, lines_we, lines)
+      class(race_ty), intent(inout) :: this
+      character(*),   intent(in)    :: lines_we(:), lines(:)
+    end subroutine
+  end interface
+
 contains
-
-  subroutine read_config (cf, cf_nml, is_print)
-    
-    type(cf_ty)                   :: cf
-    character(*), intent(in)      :: cf_nml
-    logical, intent(in), optional :: is_print
-    integer u
-
-    namelist /config/ cf 
-
-    print '(a$)', 'Reading configuration file ... '
-
-    open (newunit = u, file = cf_nml, status = 'old')
-
-    read (u, nml = config)
-
-    close (u)
-
-    print '(a)', 'done'
-
-    if (present (is_print)) then
-
-      if (is_print) then
-
-        print '(a)', 'PLACEk   : '//trim(cf%PLACE   ) 
-        print '(a)', 'DIR_HTML : '//trim(cf%DIR_HTML) 
-        print '(a)', 'DIR_CSV  : '//trim(cf%DIR_CSV ) 
-        print '(a)', 'F_LIC    : '//trim(cf%F_LIC   ) 
-        print *,     'MINS_RUN : ', cf%MINS_RUN      
-        print *,     'SEC_SLEEP: ', cf%SEC_SLEEP     
-
-      end if
-
-    end if
-
-  end subroutine
-
-  subroutine construct_days (days, date_fr, date_to)
-
-    type(datetime), intent(out), allocatable :: days(:)
-    character(*),   intent(in)               :: date_fr
-    character(*),   intent(in)               :: date_to
-    type(datetime)                           :: t_fr, t_to
-    integer                                  :: ndays
-
-    t_fr = strptime (date_fr//' 00:00:00', "%Y-%m-%d %H:%M:%S")
-    t_to = strptime (date_to//' 00:00:00', "%Y-%m-%d %H:%M:%S")
-    days = datetimeRange(t_fr, t_to, timedelta(days = 1))
-    ndays = size(days)
-
-  end subroutine
 
   subroutine get_csv_from_html (this, year, mon, day, rd, place, dir_html, dir_csv)
 
@@ -144,10 +171,10 @@ contains
     integer,           intent(in)    :: year, mon, day, rd
     character(255),    intent(in)    :: place, dir_html, dir_csv
     character(1000), allocatable     :: lines(:), lines_we(:), lines_rank(:)
-    logical                          :: is_race_open
+    logical                          :: is_race_ok
     integer                          :: i
 
-    is_race_open = .true.
+    is_race_ok = .true.
 
     this%t        = datetime(year = year, month = mon, day = day)
     this%rd       = rd
@@ -159,12 +186,12 @@ contains
 
     call this%get_html
 
-    call read_lines_html (lines, lines_we, lines_rank, is_race_open, &
+    call extract_tables (lines, lines_we, lines_rank, is_race_ok,&
       file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html')
 
-    if (.not. is_race_open) then
+    if (.not. is_race_ok) then
 
-      print *, 'Skipped since no race' 
+      print *, 'skipped' 
 
       return
 
@@ -176,7 +203,15 @@ contains
 
       call clean_line_race_conditions ( lines_we(i) )
 
+    !  print *, 'lines_we: ', trim( lines_we(i) )
+
     end do
+
+    print '(a)', 'done'
+
+    print '(a$)', 'Constructing racers ... ' 
+
+    call this%construct_race ( lines_we, lines )
 
     print '(a)', 'done'
 
@@ -190,11 +225,11 @@ contains
 
     print '(a)', 'done'
 
-    print '(a$)', 'Cleaning data of rank of run ... ' 
+    print '(a$)', 'Cleaning data of rank of lap ... ' 
 
     do i = 1, size(lines_rank)
 
-      call clean_line_rank_run ( lines_rank(i) )
+      call clean_line_rank_lap ( lines_rank(i) )
 
     end do
 
@@ -205,308 +240,6 @@ contains
 
   end subroutine
 
-  subroutine set_url (this)
-
-    class(webpage_ty), intent(inout) :: this
-
-    write(this%rd_c, '(i0)') this%rd
-
-    write (this%fn_html, '(a)') trim(this%t%strftime('%Y-%m-%d'))//'_'//trim(this%rd_c)
-
-#ifdef debug
-    print '(a)', 'URL: '//trim(this%url)
-#endif
-
-    this%url = trim(this%prefix)//trim(this%place)//'/'//trim(this%fn_html)
-    
-    this%fn_csv = this%fn_html
-
-  end subroutine
-
-  subroutine get_html (this)
-
-    class(webpage_ty), intent(inout) :: this
-    character(255)                   :: cmd, outfile
-    logical                          :: exist
-
-#ifdef debug
-    print '(a$)', 'Downloading htm: '//trim(this%url)//' ... '
-#endif
-
-    outfile = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html'
-
-    inquire (file = outfile, exist = exist)
-
-    if (exist) then
-
-      print '(a)', 'skipped' ! Since the HTML file already exists
-
-      return
-
-    end if
-
-    cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(outfile)//'"')
-
-#ifdef debug
-    print *, trim(cmd)
-#endif
-
-    call execute_command_line ( 'mkdir -p '//trim(this%dir_html)//trim(this%place)//'/' )
-
-    call execute_command_line(cmd)
-
-    print '(a)', 'done'
-
-    call sleep ( int( rand() * 3 ) )
-
-  end subroutine
-
-  subroutine read_lines_html (lines, lines_we, lines_rank, is_race_open, file)
-
-    character(*), allocatable, intent(inout) :: lines(:), lines_we(:), lines_rank(:)
-    character( len(lines) ), allocatable     :: lines_(:)
-    character(*), intent(in)                 :: file
-    logical,      intent(inout)              :: is_race_open
-    logical                                  :: is_table, is_table_we, is_table_rank
-    integer                                  :: i_fr, i_to
-    integer                                  :: i_fr_we, i_to_we
-    integer                                  :: i_fr_rank, i_to_rank
-    integer                                  :: i, u, nr
-
-    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
-
-    is_table = .false.
-
-    open (newunit = u, file = file, status = 'old')
-
-    nr = count_rows (u)
-
-    allocate ( lines_(nr) )
-    
-    i_fr          = 1
-    i_fr_we       = 1
-    i_fr_rank     = 1
-    i_to          = nr
-    i_to_we       = nr
-    i_to_rank     = nr
-    is_table      = .false.
-    is_table_we   = .false.
-    is_table_rank = .false.
-
-    !
-    ! Check if race is open
-    !
-    do i = 1, nr
-
-      read (u, '(a)') lines_(i)
-
-      if ( index(lines_(i), '本日の開催情報はありません') > 0 ) then
-
-        print *, 'Skipped since no race on that day'
-
-        is_race_open = .false.
-
-        close (u)
-
-        return
-
-      end if
-
-    end do
-
-    !
-    ! Transaction for race conditions 
-    !
-    rewind (u)
-
-    lines_ = ''
-
-    do i = 1, nr
-
-      read (u, '(a)') lines_(i)
-
-      ! Begining of table
-      if ( index(lines_(i), 'ｍ</td>') > 0 .and. .not. is_table_we ) then
-
-        i_fr_we = i
-
-        is_table_we = .true.
-
-      end if
-
-      ! End of the table
-      if ( index(lines_(i), '</table>') > 0 .and. is_table_we) then
-
-        i_to_we = i - 3
-
-        exit
-
-      end if
-
-    end do
-
-    lines_we = lines_(i_fr_we:i_to_we)
-
-    !
-    ! Transaction for race results
-    !
-    rewind (u)
-
-    lines_ = ''
-
-    do i = 1, nr
-
-      read (u, '(a)') lines_(i)
-
-      ! Begining of table
-      if ( index(lines_(i), '<td class="light f16">1</td>') > 0 .and. .not. is_table ) then
-
-        i_fr = i
-
-        is_table = .true.
-
-      end if
-
-      ! End of the table
-      if ( index(lines_(i), '</table>') > 0 .and. is_table) then
-
-        i_to = i - 3
-
-        exit
-
-      end if
-
-    end do
-
-    lines = lines_(i_fr:i_to)
-
-
-    !
-    ! Transaction for rank of run 
-    !
-    rewind (u)
-
-    lines_ = ''
-
-    do i = 1, nr
-
-      read (u, '(a)') lines_(i)
-
-      ! Begining of table
-      if ( index(lines_(i), 'ゴール線通過') > 0 .and. .not. is_table_rank ) then
-
-        i_fr_rank = i + 1
-
-        is_table_rank = .true.
-
-      end if
-
-      ! End of the table
-      if ( index(lines_(i), '</table>') > 0 .and. is_table_rank) then
-
-        i_to_rank = i - 3
-
-        exit
-
-      end if
-
-    end do
-
-    lines_rank = lines_(i_fr_rank:i_to_rank)
-
-    close (u)
-
-    print '(a)', 'done'
-
-  end subroutine
-
-  subroutine clean_line_race_conditions (line)
-
-    character(*), intent(inout) :: line
-
-    call string_replace (line, '<td>',  '')
-    call string_replace (line, '</td>', '')
-    call string_replace (line, 'ｍ',    '')
-    call string_replace (line, '℃',     '')
-    call string_replace (line, '％',    '')
-
-    line = adjustl(line)
-
-  end subroutine
-
-  subroutine clean_line_race_result (line)
-
-    character(*), intent(inout) :: line
-    integer                     :: i_a_fr, i_a_to
-
-    call string_replace (line, ' class="light f16"',        '')
-    call string_replace (line, ' class="f8"',               '')
-    call string_replace (line, ' class="f16"',              '')
-    call string_replace (line, ' class="td_white_center"',  '')
-    call string_replace (line, ' class="td_black_center"',  '')
-    call string_replace (line, ' class="td_blue_center"',   '')
-    call string_replace (line, ' class="td_orange_center"', '')
-    call string_replace (line, ' class="td_green_center"',  '')
-    call string_replace (line, ' class="td_yellow_center"', '')
-    call string_replace (line, ' class="td_pink_center"',   '')
-    call string_replace (line, ' class="td_red_center"',    '')
-    call string_replace (line, '<font class="bold" color="red">再</font>', '')
-    call string_replace (line, '－',                      'NA')
-    call string_replace (line, '<tr>',                      '')
-    call string_replace (line, '</tr>',                     '')
-    call string_replace (line, '<td></td>',                '-')
-    call string_replace (line, '<td>',                      '')
-    call string_replace (line, '</td>',                     '')
-    call string_replace (line, '　',                       ' ')
-    call string_replace (line, achar(9),                    '')
-
-    if (index(line, '<a') > 0) then
-
-      i_a_fr = index(line, '<a')
-      i_a_to = index(line, '>')
-
-      line = line(1:i_a_fr + 1)//line( i_a_to:len_trim(line) )
-
-    end if
-
-    call string_replace (line, '<a></a>', 'NA')
-    call string_replace (line, '<a>',  '')
-    call string_replace (line, '</a>', '')
-
-    line = adjustl(line)
-
-  end subroutine
-
-  subroutine clean_line_rank_run (line)
-
-    character(*), intent(inout) :: line
-
-    call string_replace (line, '<td class="td_orange_center">', '')
-    call string_replace (line, '<td class="td_blue_center">',   '')
-    call string_replace (line, '<td class="td_black_center">',  '')
-    call string_replace (line, '<td class="td_yellow_center">', '')
-    call string_replace (line, '<td class="td_green_center">',  '')
-    call string_replace (line, '<td class="td_red_center">',    '')
-    call string_replace (line, '<td class="td_white_center">',  '')
-    call string_replace (line, '<td class="td_pink_center">',   '')
-    call string_replace (line, '<tr class="td_white_center">',        '')
-    call string_replace (line, '<td class="light txtArea">1周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">2周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">3周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">4周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">5周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">6周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">7周回</td>', '')
-    call string_replace (line, '<td class="light txtArea">8周回</td>', '')
-    call string_replace (line, '<td class=""></td>', '8')
-    call string_replace (line, '</tr>', '')
-    call string_replace (line, '<td>',  '')
-    call string_replace (line, '</td>', '')
-
-    line = adjustl(line)
-
-  end subroutine
-
   subroutine write_csv_files (this, lines, lines_we, lines_rank, file)
 
     class(webpage_ty), intent(inout)     :: this
@@ -514,37 +247,20 @@ contains
     character(*),      intent(in)        :: file
     character( len(lines) ), allocatable :: lines2(:) ! No empty lines
     character(1), allocatable            :: ranks_c(:, :)
-    character(9), allocatable            :: ranks_run(:)
-    integer                              :: bike(NRCRS)
-    integer, allocatable                 :: no_rank_run(:, :) ! Value: # bike
-    integer, allocatable                 :: rank_no_run(:, :) ! Value: rank
+    character(10), allocatable           :: ranks_lap(:)
+    integer, allocatable                 :: bike(:)
+    integer, allocatable                 :: bike_rank_lap(:, :) ! Value: # bike
+    integer, allocatable                 :: rank_bike_lap(:, :) ! Value: rank
     integer                              :: i, j, k, u, nr, nr2
-    integer                              :: rank, run, nruns
+    integer                              :: rank, lap
 
-    read (lines_we(1), '(i4)') this%meters
-    nruns = (this%meters - METERS_ADD) / METERS_RUN 
+    associate ( nrcrs => this%nrcrs, nlaps => this%nlaps )
 
-    allocate ( ranks_c(NRCRS, nruns), no_rank_run(NRCRS, nruns), rank_no_run(NRCRS, nruns) )
-    allocate ( ranks_run(nruns) )
+    allocate ( ranks_c(nrcrs, nlaps), bike_rank_lap(nrcrs, nlaps), rank_bike_lap(nrcrs, nlaps) )
+    allocate ( bike(nrcrs) )
+    allocate ( ranks_lap(nlaps) )
 
-    print '(a$)', 'Opening a csv file: '//trim(file)//' ... '
-
-    call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
-
-    open (newunit = u, file = file, status = 'replace')
-
-    do i = 1, nruns
-
-      write ( ranks_run(i), '(a8,  i1)' ) 'rank_run',  i
-
-    end do
-
-    write (u, FMT_CSV_STR)&
-      "place", "date", "rd", "meters_distance", "weather", "tp", "hm", "tp_road", "road", &
-      "accident", "bike", "kanji_name_racer", &
-      "name_racer", "name_bike", "meters_handycup", &
-      "mins_trial", "mins_race", "mins_start", "violation", &
-      ranks_run
+    print '(a$)', 'Writing a csv file: '//trim(file)//' ... '
 
     !
     ! Race conditions
@@ -581,7 +297,6 @@ contains
     end do
 
 #ifdef debug
-
     nr2 = k - 1
 
     print *, ''
@@ -593,64 +308,8 @@ contains
     end do
 #endif
 
-    !
-    ! Rank of run 
-    !
-    nr = size(lines_rank)
-
-    k    = 1
-    rank = 1
-    run  = 1
-
-    do i = 1, nr
-
-      if ( is_empty( lines_rank(i) )) cycle
-
-!      print '(a$)', 'lines_rank: '//trim( lines_rank(i) )
-
-      read (lines_rank(i), '(i1)') no_rank_run(rank, NRUNS - run + 1) 
-
-!      print '(a, i1)', '; no_rank_run: ', no_rank_run(rank, NRUNS - run + 1)
-
-      rank = rank + 1
-
-      if (rank > NRCRS) then
-
-        rank = 1
-
-        run  = run + 1
-
-      end if
-
-    end do
-
-    do rank = 1, NRCRS
-
-      do run = 1, NRUNS
-
-        rank_no_run( no_rank_run(rank, run), run ) = rank
-
-      end do
-
-    end do
-
-#ifdef debug
-    print '(a)',  '-----------------------------------------------------------'
-    print '(a, *(i1, :, "    "))', '           Run: ', [(i, i = 1, NRUNS)]
-    print '(a)',  '-----------------------------------------------------------'
-
-    do i = 1, NRCRS 
-
-      print '(a, i1, a, *(i1, :, " -> "))', 'Bike: ', i, ', Ranks: ', rank_no_run(i, :)
-
-    end do
-#endif
-
-    !
-    ! Check if accidents occured.
-    ! If so, skip writing the CSV file.
-    !
-    do i = 2, 88, 11
+    ! Check if accidents occured. If so, skip writing the CSV file.
+    do i = 2, nrcrs * 11, 11
 
       if ( index (lines2(i), '-') > 0 ) cycle 
 
@@ -664,49 +323,131 @@ contains
     end do
 
     !
-    ! Get motercycle(bike) number
+    ! Rank of lap 
+    !
+    nr = size(lines_rank)
+
+    k    = 1
+    rank = 1
+    lap  = 1
+    bike_rank_lap = iNA
+
+    do i = 1, nr
+
+!      print *, 'lines_rank: ', trim( lines_rank(i) )
+
+      if ( is_empty( lines_rank(i) ) .or. lines_rank(i) == 'NA' ) cycle
+
+#ifdef debug
+!      print '(a, a, i1, a, i1, a, i2, a, i2)',&
+!        'bike: '//trim( lines_rank(i) ), ', rank: ', rank, '/', nrcrs, ', lap: ', lap, '/', nlaps
+#endif
+
+      read (lines_rank(i), *) bike_rank_lap(rank, nlaps - lap + 1) 
+
+!      print '(a, i1)', 'bike_rank_lap: ', bike_rank_lap(rank, nlaps - lap + 1)
+
+      rank = rank + 1
+
+      if (rank > nrcrs) then
+
+        rank = 1
+
+        lap  = lap + 1
+
+      end if
+
+    end do
+
+    if (lap - 1 /= nlaps) stop 'Missing laps'
+
+    do rank = 1, nrcrs
+
+      do lap = 1, nlaps
+
+        rank_bike_lap( bike_rank_lap(rank, lap), lap ) = rank
+
+      end do
+
+    end do
+
+#ifdef debug
+    print '(a)', repeat('=', 80)
+    print '(a)', ' Lap rankings '
+    print '(a)', repeat('-', 80)
+    print '(a, *(i2, :, "    "))', '           lap: ', [(i, i = 1, nlaps)]
+    print '(a)',  repeat('-', 80)
+
+!    do i = 1, nrcrs 
+!
+!      print '(a, i1, a, *(i2, :, " -> "))', 'Bike: ', i, ', Rank: ', rank_bike_lap(i, :)
+!
+!    end do
+#endif
+
+    !
+    ! Get bike number
     !
     k = 1
 
-    print *, ''
+!    print *, ''
 
-    do i = 3, 88, 11
+    do i = 3, nrcrs * 11, 11
 
       if (.not. is_numeric(lines2(i)) ) stop trim( lines2(i) )//' is NaN'
 
       read ( lines2(i), * ) bike(k)
 
-!      print *, 'bike: ',  bike(k)
+      !print *, 'bike: ',  bike(k)
 
       k = k + 1
 
     end do
 
     ! Convert integer to character for CSV writing
-    do run = 1, NRUNS
+    do lap = 1, nlaps
 
-      do i = 1, NRCRS
+      do i = 1, nrcrs
 
-!        print *, 'Bike: ', bike(i), 'Run: ', run, 'Rank: ', rank_no_run(bike(i), run)
+!        print *, 'Bike: ', bike(i), 'lap: ', lap, 'Rank: ', rank_bike_lap(bike(i), lap)
 
-        write ( ranks_c(i, run), '(i1)' ) rank_no_run( bike(i), run )
+        write ( ranks_c(i, lap), '(i1)' ) rank_bike_lap( bike(i), lap )
 
       end do
 
     end do
 
-    do i = 1, NRCRS
-
-      print '(a, i1, a, *(a, :, " -> "))', 'Racer: ', i, ', Rank: ', ranks_c(i, :)
-
+#ifdef debug
+    do i = 1, nrcrs
+      print '(a, i1, a, *(a2, :, " -> "))', 'Racer: ', i, ', Rank: ', ranks_c(i, :)
     end do
+
+    print '(a)', repeat('=', 80)
+#endif
 
     !
     ! Write race results and conditions
     !
+    do i = 1, nlaps
+
+      write ( ranks_lap(i), '(a8,  i2)' ) 'rank_lap',  i
+
+    end do
+
+    call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
+
+    open (newunit = u, file = file, status = 'replace')
+
+    write (u, FMT_CSV_STR)&
+      "place", "date", "rd", "meters_distance", "weather", "tp", "hm", "tp_road", "road", &
+      "bike", "kanji_name_racer", &
+      "name_racer", "name_bike", "meters_handycup", &
+      "mins_trial", "mins_race", "mins_start", "violation", &
+      ranks_lap
+
     k = 1
 
-    do i = 1, nr2, 11
+    do i = 1, nrcrs * 11, 11
 
       write (u, '(*(a, :, ","))')   &
         trim( this%place  ),        & ! Place
@@ -718,7 +459,7 @@ contains
         trim( lines_we(4) ),        & ! Humidity
         trim( lines_we(5) ),        & ! Temperature of road
         trim( lines_we(6) ),        & ! Road condition
-        [(lines2(i + j), j = 1, 10)], &  ! accident, bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
+        [(lines2(i + j), j = 2, 10)], &  ! bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
         ranks_c(k, :)
 
       k = k + 1
@@ -726,6 +467,8 @@ contains
     end do
 
     close (u)
+
+    end associate
 
     print '(a)', 'done'
 
