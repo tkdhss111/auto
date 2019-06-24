@@ -1,5 +1,5 @@
 EXE      := dl_auto
-SRCS     := cli_dl_auto_mo.f90 dl_auto_mo.f90 init_smo.f90 set_get_url_smo.f90 clean_lines_smo.f90 extract_tables_smo.f90 main.f90
+SRCS     := cli_dl_auto_mo.f90 dl_auto_mo.f90 init_smo.f90 set_get_url_smo.f90 clean_lines_smo.f90 extract_tables_smo.f90 write_csv_files_smo.f90 main.f90
 DIR_PROJ := auto/
 VPATH    := 
 

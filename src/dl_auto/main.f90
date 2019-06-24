@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-24 11:00:21.
+! Last Updated: 2019-06-24 18:56:13.
 
 program main
 
@@ -68,17 +68,17 @@ program main
 
   do i = 1, size(days)
 
-    do rd = 1, 12
+    do rd = 1, 1
 
       call print_title
 
-      call webpage%get_csv_from_html (year     = days(i)%getYear(),  &
-                                      mon      = days(i)%getMonth(), &
-                                      day      = days(i)%getDay(),   &
-                                      rd       = rd,                 &
-                                      place    = cf%place,           &
-                                      dir_html = cf%dir_html,        &
-                                      dir_csv  = cf%dir_csv)
+      call webpage%dl_auto (year     = days(i)%getYear(),  &
+                            mon      = days(i)%getMonth(), &
+                            day      = days(i)%getDay(),   &
+                            rd       = rd,                 &
+                            place    = cf%place,           &
+                            dir_html = cf%dir_html,        &
+                            dir_csv  = cf%dir_csv)
     end do
 
   end do
