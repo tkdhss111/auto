@@ -29,7 +29,7 @@ contains
     integer                              :: nr, nr_cd, nr_result, nr_pay, nr_rank
     integer                              :: i, k, u
 
-    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
+!    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
 
     is_table = .false.
 
@@ -109,17 +109,17 @@ contains
 
     !print '(a)', 'done'
 
-#ifdef debug
-    print *, ''
-
-    nr_cd = i_to - i_fr + 1
-
-    do i = 1, nr_cd
-
-      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr_cd, '; '//trim( lines_cd(i) )
-
-    end do
-#endif
+!#ifdef debug
+!    print *, ''
+!
+!    nr_cd = i_to - i_fr + 1
+!
+!    do i = 1, nr_cd
+!
+!      print '(a, i3, a, i3, a)', 'Line: ', i, '/', nr_cd, '; '//trim( lines_cd(i) )
+!
+!    end do
+!#endif
 
     !
     ! Transaction for race results
@@ -196,12 +196,12 @@ contains
 
     end do
 
-#ifdef debug
-    print *, ''
-    do i = 1, nr_result
-      print '(a, i3, a, i3, a)', 'Line(result): ', i, '/', nr_result, '; '//trim( lines(i) )
-    end do
-#endif
+!#ifdef debug
+!    print *, ''
+!    do i = 1, nr_result
+!      print '(a, i3, a, i3, a)', 'Line(result): ', i, '/', nr_result, '; '//trim( lines(i) )
+!    end do
+!#endif
 
     !
     ! Transaction for rank of lap 
@@ -249,13 +249,13 @@ contains
 
     lines_rank = lines_(i_fr:i_to)
 
-#ifdef debug
-    nr_rank = i_to - i_fr + 1
-    print *, ''
-    do i = 1, nr_rank
-      print '(a, i3, a, i3, a)', 'Line(rank): ', i, '/', nr_rank, '; '//trim( lines_rank(i) )
-    end do
-#endif
+!#ifdef debug
+!    nr_rank = i_to - i_fr + 1
+!    print *, ''
+!    do i = 1, nr_rank
+!      print '(a, i3, a, i3, a)', 'Line(rank): ', i, '/', nr_rank, '; '//trim( lines_rank(i) )
+!    end do
+!#endif
 
     !
     ! Transaction for pay 
@@ -303,19 +303,47 @@ contains
 
     lines_pay = lines_(i_fr:i_to)
 
-#ifdef debug
-    nr_pay = i_to - i_fr + 1
+!#ifdef debug
+!    nr_pay = i_to - i_fr + 1
+!    print *, ''
+!    do i = 1, nr_pay
+!      print '(a, i3, a, i3, a)', 'Line(pay): ', i, '/', nr_pay, '; '//trim( lines_pay(i) )
+!    end do
+!#endif
+
+    !
+    ! Payout 
+    !
+     payout%exacta   = trim( lines_pay(  8) )
+     payout%quinella = trim( lines_pay( 23) )
+     payout%trifecta = trim( lines_pay( 36) )
+     payout%trio     = trim( lines_pay( 50) )
+     payout%wide(1)  = trim( lines_pay( 60) )
+     payout%wide(2)  = trim( lines_pay( 68) )
+     payout%wide(3)  = trim( lines_pay( 76) )
+     payout%win      = trim( lines_pay( 87) )
+     payout%place(1) = trim( lines_pay( 96) )
+     payout%place(2) = trim( lines_pay(101) )
+     payout%place(3) = trim( lines_pay(106) )
+
     print *, ''
-    do i = 1, nr_pay
-      print '(a, i3, a, i3, a)', 'Line(pay): ', i, '/', nr_pay, '; '//trim( lines_pay(i) )
-    end do
-#endif
+    print '(a)', repeat('=', 80)
+    print '(a)', '  Payout'
+    print '(a)', repeat('-', 80)
+    print '(a)', '  Exacta  : '//payout%exacta
+    print '(a)', '  Quinella: '//payout%quinella
+    print '(a)', '  Trifecta: '//payout%trifecta
+    print '(a)', '  Trio    : '//payout%trio
+    print '(a)', '  Win     : '//payout%win
+    print '(a)', '  Place   : '//payout%place(1)//payout%place(2)//payout%place(3)
+    print '(a)', '  Wide    : '//payout%wide(1)//payout%wide(2)//payout%wide(3)
+    print '(a)', repeat('=', 80)
 
     !-------------------------------------------------------------
 
     close (u)
 
-    print '(a)', 'done'
+!    print '(a)', 'done'
 
   end subroutine
 
@@ -326,9 +354,9 @@ contains
     character(len(lines))            :: line
     integer                          :: i
 
-#ifdef debug
-    print '(a$)', 'Constructing racers ... ' 
-#endif
+!#ifdef debug
+!    print '(a$)', 'Constructing racers ... ' 
+!#endif
 
     !
     ! Get circle meters and calculate number of laps
@@ -337,9 +365,9 @@ contains
 
     this%nlaps = (this%meters - METERS_ADD) / METERS_LAP + 1 ! NB: +1 
 
-#ifdef debug
-    print '(a, i2$)', 'Number of laps: ', this%nlaps ! N.B. the last 100m is counted one lap
-#endif
+!#ifdef debug
+!    print '(a, i2$)', 'Number of laps: ', this%nlaps ! N.B. the last 100m is counted one lap
+!#endif
 
     !
     ! Count number of racers and construct racer object (rcrs)
@@ -363,9 +391,9 @@ contains
 
     end do
 
-#ifdef debug
-    print '(a, i2, a$)', ', Number of racers: ', n, ' ... '
-#endif
+!#ifdef debug
+!    print '(a, i2, a$)', ', Number of racers: ', n, ' ... '
+!#endif
 
     if ( allocated (this%rcrs) ) deallocate (this%rcrs)
 
@@ -373,9 +401,9 @@ contains
 
     end associate
 
-#ifdef debug
-    print '(a)', 'done'
-#endif
+!#ifdef debug
+!    print '(a)', 'done'
+!#endif
 
   end subroutine
 

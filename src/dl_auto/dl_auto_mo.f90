@@ -17,6 +17,27 @@ module dl_auto_mo
 
   type(datetime), allocatable :: days(:)
 
+  type payout_ty
+
+    character(20) :: exacta   ! 二連単
+    character(20) :: quinella ! 二連複
+    character(20) :: trifecta ! 三連単
+    character(20) :: trio     ! 三連複
+    character(20) :: win      ! 単勝
+    character(20) :: place(3) ! 複勝
+    character(20) :: wide(3)  ! ワイド 
+
+    !integer :: exacta   ! 二連単
+    !integer :: quinella ! 二連複
+    !integer :: trifecta ! 三連単
+    !integer :: trio     ! 三連複
+    !integer :: win      ! 単勝
+    !integer :: place(3) ! 複勝
+    !integer :: wide(3)  ! ワイド 
+  end type
+
+  type(payout_ty) :: payout
+
   type cf_ty
 
     character(255) :: PLACE     = 'NA'
@@ -204,7 +225,7 @@ contains
 
     call this%get_html
 
-    call this%extract_tables (lines, lines_cd, lines_rank, lines_pay, is_race_ok,&
+    call this%extract_tables (lines, lines_cd, lines_rank, lines_pay, is_race_ok, &
       file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html')
 
     if (.not. is_race_ok) then
@@ -217,7 +238,7 @@ contains
 
     end if
 
-    call this%write_csv_files (lines, lines_cd, lines_rank,&
+    call this%write_csv_files (lines, lines_cd, lines_rank, &
       file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
 
   end subroutine

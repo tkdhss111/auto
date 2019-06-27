@@ -20,7 +20,7 @@ contains
 
     namelist /config/ cf 
 
-    print '(a$)', 'Reading configuration file ... '
+!    print '(a$)', 'Reading configuration file ... '
 
     open (newunit = u, file = cf_nml, status = 'old')
 
@@ -28,7 +28,7 @@ contains
 
     close (u)
 
-    print '(a)', 'done'
+!    print '(a)', 'done'
 
     if (present (is_print)) then
 

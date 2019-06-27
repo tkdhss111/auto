@@ -21,9 +21,9 @@ contains
 
     this%url = trim(this%prefix)//trim(this%place)//'/'//trim(this%fn_html)
 
-#ifdef debug
-    print '(a)', 'URL: '//trim(this%url)
-#endif
+!#ifdef debug
+!    print '(a)', 'URL: '//trim(this%url)
+!#endif
     
     this%fn_csv = this%fn_html
 
@@ -53,9 +53,9 @@ contains
 
     cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(outfile)//'"')
 
-#ifdef debug
-    print *, trim(cmd)
-#endif
+!#ifdef debug
+!    print *, trim(cmd)
+!#endif
 
     call execute_command_line ( 'mkdir -p '//trim(this%dir_html)//trim(this%place)//'/' )
 

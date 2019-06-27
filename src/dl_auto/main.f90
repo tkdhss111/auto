@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-24 18:56:13.
+! Last Updated: 2019-06-27 21:42:33.
 
 program main
 
@@ -89,8 +89,8 @@ program main
 
       print *, ''
       print '(a)', repeat('=', 80)
-      print '(a, i2)', 'Day: '//days(i)%dateformat()//', Round: ', rd
-      print '(a)', repeat('=', 80)
+      print '(a, i2)', '  Place: '//trim(cf%place)//', Day: '//days(i)%dateformat()//', Round: ', rd
+      print '(a)', repeat('-', 80)
 
     end subroutine
 

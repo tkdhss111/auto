@@ -16,8 +16,10 @@ contains
     class(webpage_ty), intent(inout)     :: this
     character(*),      intent(in)        :: lines(:), lines_cd(:), lines_rank(:)
     character(*),      intent(in)        :: file
-    character(1), allocatable            :: ranks_c(:, :)
+    character(1),  allocatable           :: ranks_c(:, :)
     character(10), allocatable           :: ranks_lap(:)
+    character(10), allocatable           :: payout_win(:)
+    character(10), allocatable           :: payout_place(:)
     integer, allocatable                 :: bike(:)
     integer, allocatable                 :: bike_rank_lap(:, :) ! Value: # bike
     integer, allocatable                 :: rank_bike_lap(:, :) ! Value: rank
@@ -27,10 +29,20 @@ contains
     associate ( nrcrs => this%nrcrs, nlaps => this%nlaps )
 
     allocate ( ranks_c(nrcrs, nlaps), bike_rank_lap(nrcrs, nlaps), rank_bike_lap(nrcrs, nlaps) )
-    allocate ( bike(nrcrs) )
-    allocate ( ranks_lap(nlaps) )
+    allocate ( bike(nrcrs), payout_win(nrcrs), payout_place(nrcrs) )
+    allocate ( ranks_lap(nlaps - 1) )
 
-    print '(a$)', 'Writing a csv file: '//trim(file)//' ... '
+    payout_win = '0'
+    payout_win(1) = trim( payout%win )
+
+    payout_place = '0'
+    payout_place(1) = trim( payout%place(1) )
+    payout_place(2) = trim( payout%place(2) )
+    payout_place(3) = trim( payout%place(3) )
+
+!#ifdef debug
+!    print '(a$)', 'Writing a csv file: '//trim(file)//' ... '
+!#endif
 
     ! Check if accidents occured. If so, skip writing the CSV file.
     do i = 2, nrcrs * 11, 11
@@ -63,10 +75,10 @@ contains
       if ( is_empty( lines_rank(i) ) .or. .not. is_numeric( lines_rank(i) ) .or.&
            lines_rank(i) == 'NA' ) cycle
 
-#ifdef debug
+!#ifdef debug
 !      print '(a, a, i1, a, i1, a, i2, a, i2)',&
 !        'bike: '//trim( lines_rank(i) ), ', rank: ', rank, '/', nrcrs, ', lap: ', lap, '/', nlaps
-#endif
+!#endif
 
       read (lines_rank(i), *) bike_rank_lap(rank, nlaps - lap + 1) 
 
@@ -99,16 +111,18 @@ contains
 #ifdef debug
     print *, ''
     print '(a)', repeat('=', 80)
-    print '(a)', ' Lap rankings '
+    print '(a)', '  Lap rankings '
     print '(a)', repeat('-', 80)
     print '(a, *(i2, :, "    "))', '           lap: ', [(i, i = 1, nlaps)]
     print '(a)',  repeat('-', 80)
 
-!    do i = 1, nrcrs 
-!
-!      print '(a, i1, a, *(i2, :, " -> "))', 'Bike: ', i, ', Rank: ', rank_bike_lap(i, :)
-!
-!    end do
+    do i = 1, nrcrs 
+
+      print '(a, i1, a, *(i2, :, " -> "))', 'Bike : ', i, ', Rank: ', rank_bike_lap(i, :)
+
+    end do
+
+    print '(a)',  repeat('-', 80)
 #endif
 
     !
@@ -154,9 +168,9 @@ contains
     !
     ! Write race results and conditions
     !
-    do i = 1, nlaps
+    do i = 1, nlaps - 1
 
-      write ( ranks_lap(i), '(a8,  i2)' ) 'rank_lap',  i
+      write ( ranks_lap(i), '(a,  i0)' ) 'rank_lap_',  i
 
     end do
 
@@ -166,9 +180,9 @@ contains
 
     write (u, FMT_CSV_STR)&
       "place", "date", "rd", "meters_distance", "weather", "tp", "hm", "tp_road", "road", &
-      "bike", "kanji_name_racer", &
+      "rank_goal", "bike", "kanji_name_racer", &
       "name_racer", "name_bike", "meters_handycup", &
-      "mins_trial", "mins_race", "mins_start", "violation", &
+      "mins_trial", "mins_race", "mins_start", "violation", "payout_win", "payout_place", &
       ranks_lap
 
     k = 1
@@ -185,8 +199,11 @@ contains
         trim( lines_cd(4) ),        & ! Humidity
         trim( lines_cd(5) ),        & ! Temperature of road
         trim( lines_cd(6) ),        & ! Road condition
-        [(lines(i + j), j = 2, 10)], &  ! bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
-        ranks_c(k, :)
+        ranks_c(k, nlaps),          & ! Goal ranking
+        [(lines(i + j), j = 2, 10)], & ! bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
+        trim( payout_win(k) ),   &
+        trim( payout_place(k) ), &
+        ranks_c(k, 1:nlaps - 1)
 
       k = k + 1
 
@@ -196,7 +213,9 @@ contains
 
     end associate
 
-    print '(a)', 'done'
+!#ifdef debug
+!    print '(a)', 'done'
+!#endif
 
   end subroutine
 

@@ -70,7 +70,6 @@ contains
   module subroutine clean_line_pay (line)
 
     character(*), intent(inout) :: line
-    integer                     :: i
 
     call clear_tags (line, 'a')
     call clear_tags (line, 'tr')
