@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-27 21:42:33.
+! Last Updated: 2019-06-28 20:54:28.
 
 program main
 
@@ -14,7 +14,8 @@ program main
   type(cf_ty)      :: cf
   character(19)    :: date_fr, date_to, mode
   character(255)   :: cf_nml
-  integer          :: rd
+  character(20), allocatable :: places(:)
+  integer          :: rd, p
 
   cmd%title    = 'Program for downloading auto data as HTML'
   cmd%exe      = 'dl_auto'
@@ -66,19 +67,27 @@ program main
 
   call construct_days (days, date_fr, date_to)
 
-  do i = 1, size(days)
+  call get_cells_from_line (cf%place, places)
 
-    do rd = 1, 1
+  places = adjustl(places)
 
-      call print_title
+  do p = 1, size(places)
 
-      call webpage%dl_auto (year     = days(i)%getYear(),  &
-                            mon      = days(i)%getMonth(), &
-                            day      = days(i)%getDay(),   &
-                            rd       = rd,                 &
-                            place    = cf%place,           &
-                            dir_html = cf%dir_html,        &
-                            dir_csv  = cf%dir_csv)
+    do i = 1, size(days)
+
+      do rd = 1, 1
+
+        call print_title
+
+        call webpage%dl_auto (year     = days(i)%getYear(),  &
+                              mon      = days(i)%getMonth(), &
+                              day      = days(i)%getDay(),   &
+                              rd       = rd,                 &
+                              place    = places(p),          &
+                              dir_html = cf%dir_html,        &
+                              dir_csv  = cf%dir_csv)
+      end do
+
     end do
 
   end do
@@ -89,7 +98,7 @@ program main
 
       print *, ''
       print '(a)', repeat('=', 80)
-      print '(a, i2)', '  Place: '//trim(cf%place)//', Day: '//days(i)%dateformat()//', Round: ', rd
+      print '(a, i2)', '  Place: '//trim( places(p) )//', Day: '//days(i)%dateformat()//', Round: ', rd
       print '(a)', repeat('-', 80)
 
     end subroutine

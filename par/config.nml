@@ -1,7 +1,7 @@
 &CONFIG
-CF%PLACE      = "kawaguchi",                    ! Race place
-CF%DIR_HTML   = "/home/eric/3_Data/auto/html/", ! Directory for HTML download folder
-CF%DIR_CSV    = "/home/eric/3_Data/auto/csv/",  ! Directory for CSV folder
+CF%PLACE      = 'kawaguchi, isesaki, hamamatsu, iizuka, sanyo', ! Race place
+CF%DIR_HTML   = "/home/eric/3_Data/auto/html/",                 ! Directory for HTML download folder
+CF%DIR_CSV    = "/home/eric/3_Data/auto/csv/",                  ! Directory for CSV folder
 CF%F_LIC      = "/home/eric/1_Projects/auto/par/license", ! License file
 CF%MINS_RUN   = 15, ! Server process runs at MINS_RUN past every hour 
 CF%SEC_SLEEP  = 60, ! Server process sleeps for SEC_SLEEP for clock check 

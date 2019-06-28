@@ -9,6 +9,7 @@ module dl_auto_mo
 
   use file_mo
   use px_mo
+  use csv2sqlite_mo
   
   implicit none
 
@@ -27,13 +28,6 @@ module dl_auto_mo
     character(20) :: place(3) ! 複勝
     character(20) :: wide(3)  ! ワイド 
 
-    !integer :: exacta   ! 二連単
-    !integer :: quinella ! 二連複
-    !integer :: trifecta ! 三連単
-    !integer :: trio     ! 三連複
-    !integer :: win      ! 単勝
-    !integer :: place(3) ! 複勝
-    !integer :: wide(3)  ! ワイド 
   end type
 
   type(payout_ty) :: payout
@@ -195,10 +189,11 @@ module dl_auto_mo
   ! Interface for submodule: write_csv_files_smo.f90
   !
   interface write_csv_files
-    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file)
+    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file, skipped)
       class(webpage_ty), intent(inout)     :: this
       character(*),      intent(in)        :: lines(:), lines_cd(:), lines_rank(:)
       character(*),      intent(in)        :: file
+      logical,           intent(inout)     :: skipped
     end subroutine
   end interface
 
@@ -208,10 +203,11 @@ contains
 
     class(webpage_ty), intent(inout) :: this
     integer,           intent(in)    :: year, mon, day, rd
-    character(255),    intent(in)    :: place, dir_html, dir_csv
+    character(*),      intent(in)    :: place, dir_html, dir_csv
     character(1000), allocatable     :: lines(:), lines_cd(:)
     character(1000), allocatable     :: lines_rank(:), lines_pay(:)
-    logical                          :: is_race_ok
+    logical                          :: is_race_ok, skipped
+    character(20)                    :: ctys(27)
 
     is_race_ok = .true.
 
@@ -220,6 +216,17 @@ contains
     this%place    = trim(place)
     this%dir_html = trim(dir_html)
     this%dir_csv  = trim(dir_csv)
+
+    !
+    ! Skipped date and round list
+    !
+    if ( this%place == 'kawaguchi' ) then
+
+      if ( this%t%dateformat() == '2011-03-12' .and. rd == 1 ) return
+      if ( this%t%dateformat() == '2011-03-13' .and. rd == 1 ) return
+      if ( this%t%dateformat() == '2011-03-14' .and. rd == 1 ) return
+
+    end if
 
     call this%set_url
 
@@ -239,7 +246,14 @@ contains
     end if
 
     call this%write_csv_files (lines, lines_cd, lines_rank, &
-      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
+      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv', skipped = skipped)
+
+    if ( .not. skipped ) then
+
+      ctys = 'char(20)'
+      call csv2sqlite (dbnm = 'test.db', tbnm = 'test', ctys = ctys, csv = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
+
+    end if
 
   end subroutine
 

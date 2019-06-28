@@ -26,7 +26,8 @@ contains
     character( len(lines) ), allocatable :: lines_(:)
     logical                              :: is_table
     integer                              :: i_fr, i_to
-    integer                              :: nr, nr_cd, nr_result, nr_pay, nr_rank
+    integer                              :: nr, nr_result
+  !  integer                              :: nr, nr_cd, nr_result, nr_pay, nr_rank
     integer                              :: i, k, u
 
 !    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
@@ -49,9 +50,10 @@ contains
       read (u, '(a)') lines_(i)
 
       if ( index(lines_(i), '本日の開催情報はありません') > 0 .or. &
-           index(lines_(i), 'ページが見つかりません') > 0 ) then
+           index(lines_(i), 'ページが見つかりません') > 0  .or. &
+           index(lines_(i), '不成立') > 0 ) then
 
-        print *, '/kipped'
+      !  print *, 'skipped'
 
         is_race_ok = .false.
 
@@ -188,7 +190,7 @@ contains
 
     do i = i_fr, i_to
 
-      if ( is_empty( lines_(i) )) cycle
+      if ( is_empty( lines_(i) ) ) cycle
 
       lines(k) = lines_(i)
 

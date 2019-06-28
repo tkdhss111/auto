@@ -11,11 +11,12 @@ submodule (dl_auto_mo) write_csv_files_smo
 
 contains
 
-  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file)
+  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file, skipped)
 
     class(webpage_ty), intent(inout)     :: this
     character(*),      intent(in)        :: lines(:), lines_cd(:), lines_rank(:)
     character(*),      intent(in)        :: file
+    logical,           intent(inout)     :: skipped
     character(1),  allocatable           :: ranks_c(:, :)
     character(10), allocatable           :: ranks_lap(:)
     character(10), allocatable           :: payout_win(:)
@@ -45,6 +46,8 @@ contains
 !#endif
 
     ! Check if accidents occured. If so, skip writing the CSV file.
+    skipped = .false.
+
     do i = 2, nrcrs * 11, 11
 
       if ( index (lines(i), '-') > 0 ) cycle 
@@ -53,6 +56,8 @@ contains
       print *, '***********************************************************'
       print *, trim( lines(i) )//' occured and this race has been skipped.'
       print *, '***********************************************************'
+
+      skipped = .true.
 
       return
 

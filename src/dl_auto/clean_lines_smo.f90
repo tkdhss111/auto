@@ -83,6 +83,8 @@ contains
     call string_replace (line, '(', '')
     call string_replace (line, '円', '')
     call string_replace (line, '着', '')
+    call string_replace (line, '特払い', '')
+    call string_replace (line, '無投票', '100')
     !call string_replace (line, '=      ', '')
     !call string_replace (line, '－      ', '')
     !call string_replace (line, '＝', ';')
