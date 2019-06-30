@@ -35,6 +35,8 @@ module dl_auto_mo
   type cf_ty
 
     character(255) :: PLACE     = 'NA'
+    character(255) :: DB_AUTO   = 'NA'
+    character(255) :: TB_RACE   = 'NA'
     character(255) :: DIR_HTML  = 'NA'
     character(255) :: DIR_CSV   = 'NA'
     character(255) :: F_LIC     = 'NA'
@@ -169,12 +171,12 @@ module dl_auto_mo
   !
   interface extract_tables
     module subroutine extract_tables &
-        (this, lines, lines_cd, lines_rank, lines_pay, is_race_ok, file)
-      class(webpage_ty), intent(inout)         :: this
-      character(*), intent(inout), allocatable :: lines(:), lines_cd(:)
-      character(*), intent(inout), allocatable :: lines_rank(:), lines_pay(:)
-      logical,      intent(inout)              :: is_race_ok
-      character(*), intent(in)                 :: file
+        (this, lines, lines_cd, lines_rank, lines_pay, skipped, file)
+      class(webpage_ty), intent(inout)              :: this
+      character(*),      intent(inout), allocatable :: lines(:), lines_cd(:)
+      character(*),      intent(inout), allocatable :: lines_rank(:), lines_pay(:)
+      logical,           intent(inout)              :: skipped
+      character(*),      intent(in)                 :: file
     end subroutine
   end interface
   
@@ -189,27 +191,26 @@ module dl_auto_mo
   ! Interface for submodule: write_csv_files_smo.f90
   !
   interface write_csv_files
-    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file, skipped)
-      class(webpage_ty), intent(inout)     :: this
-      character(*),      intent(in)        :: lines(:), lines_cd(:), lines_rank(:)
-      character(*),      intent(in)        :: file
-      logical,           intent(inout)     :: skipped
+    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped, file)
+      class(webpage_ty), intent(inout) :: this
+      character(*),      intent(in)    :: lines(:), lines_cd(:), lines_rank(:)
+      logical,           intent(inout) :: skipped
+      character(*),      intent(in)    :: file
     end subroutine
   end interface
 
 contains
 
-  subroutine dl_auto (this, year, mon, day, rd, place, dir_html, dir_csv)
+  subroutine dl_auto (this, cf, year, mon, day, rd, place, dir_html, dir_csv)
 
     class(webpage_ty), intent(inout) :: this
+    type(cf_ty),       intent(in)    :: cf
     integer,           intent(in)    :: year, mon, day, rd
     character(*),      intent(in)    :: place, dir_html, dir_csv
     character(1000), allocatable     :: lines(:), lines_cd(:)
     character(1000), allocatable     :: lines_rank(:), lines_pay(:)
-    logical                          :: is_race_ok, skipped
-    character(20)                    :: ctys(27)
-
-    is_race_ok = .true.
+    logical                          :: skipped
+    character(20)                    :: ctys(33) ! N.B. Need to change if you increase columns
 
     this%t        = datetime(year = year, month = mon, day = day)
     this%rd       = rd
@@ -220,40 +221,73 @@ contains
     !
     ! Skipped date and round list
     !
-    if ( this%place == 'kawaguchi' ) then
+!    if ( this%place == 'kawaguchi' ) then
+!
+!      if ( this%t%dateformat() == '2011-03-12') return
+!      if ( this%t%dateformat() == '2011-03-13') return
+!      if ( this%t%dateformat() == '2011-03-14') return
+!
+!    end if
 
-      if ( this%t%dateformat() == '2011-03-12' .and. rd == 1 ) return
-      if ( this%t%dateformat() == '2011-03-13' .and. rd == 1 ) return
-      if ( this%t%dateformat() == '2011-03-14' .and. rd == 1 ) return
-
-    end if
+!    if ( this%place == 'isesaki' ) then
+!
+!      if ( this%t%dateformat() == '2011-03-15') return
+!      if ( this%t%dateformat() == '2011-03-16') return
+!      if ( this%t%dateformat() == '2011-03-17') return
+!      if ( this%t%dateformat() == '2011-03-26') return
+!      if ( this%t%dateformat() == '2011-03-27') return
+!      if ( this%t%dateformat() == '2011-03-28') return
+!      if ( this%t%dateformat() == '2011-03-29') return
+!
+!    end if
 
     call this%set_url
 
     call this%get_html
 
-    call this%extract_tables (lines, lines_cd, lines_rank, lines_pay, is_race_ok, &
-      file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html')
+    skipped = .false.
 
-    if (.not. is_race_ok) then
+    call this%extract_tables ( lines, lines_cd, lines_rank, lines_pay, skipped, &
+      file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html' )
 
-#ifdef debug
-      print *, 'skipped' 
-#endif
+    if (skipped) return
 
-      return
+    call this%write_csv_files ( lines, lines_cd, lines_rank, skipped, &
+      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv' )
 
-    end if
+    if (skipped) return
 
-    call this%write_csv_files (lines, lines_cd, lines_rank, &
-      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv', skipped = skipped)
+    ctys( 1) = 'char(80)' ! key
+    ctys( 2) = 'char(30)' ! place
+    ctys( 3) = 'char(10)' ! date
+    ctys( 4) = 'integer'  ! round
+    ctys( 5) = 'integer'  ! distance
+    ctys( 6) = 'char(10)' ! we
+    ctys( 7) = 'real'     ! tp
+    ctys( 8) = 'real'     ! hm
+    ctys( 9) = 'real'     ! tp_road
+    ctys(10) = 'char(30)' ! road
+    ctys(11) = 'integer'  ! nlaps
+    ctys(12) = 'integer'  ! rank_goal
+    ctys(13) = 'integer'  ! bike
+    ctys(14) = 'char(50)' ! kanji_name_racer
+    ctys(14) = 'char(50)' ! name_racer
+    ctys(15) = 'char(50)' ! name_biki
+    ctys(16) = 'integer'  ! handycup
+    ctys(17) = 'real'     ! sec_trial
+    ctys(18) = 'real'     ! sec_race
+    ctys(19) = 'real'     ! sec_start
+    ctys(20) = 'char(50)' ! violation
+    ctys(21) = 'integer'  ! payout_win
+    ctys(22) = 'integer'  ! payout_place
+    ctys(23:)= 'integer'  ! rank_lap 
 
-    if ( .not. skipped ) then
+    call csv2sqlite ( dbnm    = cf%DB_AUTO, &
+                      tbnm    = cf%TB_RACE, &
+                      primary = 'key',      &
+                      ctys    = ctys,       &
+                      csv     = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
 
-      ctys = 'char(20)'
-      call csv2sqlite (dbnm = 'test.db', tbnm = 'test', ctys = ctys, csv = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
-
-    end if
 
   end subroutine
 

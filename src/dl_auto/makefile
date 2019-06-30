@@ -10,3 +10,9 @@ run: prep release
 	--config $(DIR_PROJS)$(DIR_PROJ)par/config.nml \
 	--date_fr  '2006-10-01' \
 	--date_to  '2019-06-20'
+
+funabashi: prep release
+	$(DIR_PROJS)$(DIR_PROJ)bin/Release/$(EXE) \
+	--config $(DIR_PROJS)$(DIR_PROJ)par/config_funabashi.nml \
+	--date_fr  '2006-10-01' \
+	--date_to  '2016-03-30'

@@ -1,7 +1,11 @@
 #!/bin/bash
+echo $HOME
+EXE=taketa_dl_auto
+OPTIONS='--config /home/eric/1_Projects/auto/par/0_com/config.nml --mode routine'
 
-EXE=taketa_dl_jma_html
-OPTIONS='--config /home/eric/1_Projects/JMA/par/0_com/config.nml --mode routine'
+chmod -R 777 "${HOME}/1_Projects"
+chmod -R 777 "${HOME}/3_Data"
+chmod -R 777 "/var/www/auto"
 
 cat <<EOF>/etc/systemd/system/${EXE}.service
 [Unit]
@@ -17,8 +21,6 @@ EOF
 
 systemctl daemon-reload
 systemctl stop ${EXE}.service
-make
-make run
 make install
 systemctl enable ${EXE}.service
 systemctl start ${EXE}.service

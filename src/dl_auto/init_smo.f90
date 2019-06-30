@@ -35,6 +35,8 @@ contains
       if (is_print) then
 
         print '(a)', 'PLACEk   : '//trim(cf%PLACE   ) 
+        print '(a)', 'DB_AUTO  : '//trim(cf%DB_AUTO ) 
+        print '(a)', 'TB_RACE  : '//trim(cf%TB_RACE ) 
         print '(a)', 'DIR_HTML : '//trim(cf%DIR_HTML) 
         print '(a)', 'DIR_CSV  : '//trim(cf%DIR_CSV ) 
         print '(a)', 'F_LIC    : '//trim(cf%F_LIC   ) 

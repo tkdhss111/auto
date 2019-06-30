@@ -1,0 +1,10 @@
+&CONFIG
+CF%PLACE      = 'funabashi',                              ! Race place
+CF%DB_AUTO    = "/var/www/stats.dip.jp/auto/auto.db",     ! Database
+CF%TB_RACE    = "race",                                   ! Table name for race result
+CF%DIR_HTML   = "/home/eric/3_Data/auto/html/",           ! Directory for HTML download folder
+CF%DIR_CSV    = "/home/eric/3_Data/auto/csv/",            ! Directory for CSV folder
+CF%F_LIC      = "/home/eric/1_Projects/auto/par/license", ! License file
+CF%MINS_RUN   = 15, ! Server process runs at MINS_RUN past every hour 
+CF%SEC_SLEEP  = 60, ! Server process sleeps for SEC_SLEEP for clock check 
+/

@@ -1,5 +1,7 @@
 &CONFIG
-CF%PLACE      = 'kawaguchi, isesaki, hamamatsu, iizuka, sanyo', ! Race place
+CF%PLACE      = 'kawaguchi, isesaki, hamamatsu, iizuka, sanyou', ! Race place
+CF%DB_AUTO    = "/var/www/stats.dip.jp/auto/auto.db",           ! Database
+CF%TB_RACE    = "race",                                         ! Table name for race result
 CF%DIR_HTML   = "/home/eric/3_Data/auto/html/",                 ! Directory for HTML download folder
 CF%DIR_CSV    = "/home/eric/3_Data/auto/csv/",                  ! Directory for CSV folder
 CF%F_LIC      = "/home/eric/1_Projects/auto/par/license", ! License file

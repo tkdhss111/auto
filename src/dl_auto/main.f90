@@ -1,4 +1,4 @@
-! Last Updated: 2019-06-28 20:54:28.
+! Last Updated: 2019-06-30 14:42:36.
 
 program main
 
@@ -10,12 +10,12 @@ program main
 
   implicit none
 
-  type(webpage_ty) :: webpage
-  type(cf_ty)      :: cf
-  character(19)    :: date_fr, date_to, mode
-  character(255)   :: cf_nml
+  type(webpage_ty)           :: webpage
+  type(cf_ty)                :: cf
+  character(19)              :: date_fr, date_to, mode
+  character(255)             :: cf_nml
   character(20), allocatable :: places(:)
-  integer          :: rd, p
+  integer                    :: rd, p
 
   cmd%title    = 'Program for downloading auto data as HTML'
   cmd%exe      = 'dl_auto'
@@ -54,8 +54,8 @@ program main
 
 #ifdef debug
   cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
-  date_fr = '2008-12-30'
-  date_to = '2008-12-30'
+  date_fr = '2011-03-14'
+  date_to = '2011-03-14'
   mode    = 'nonexist'
 #else
   call cmd%get_args (cf_nml, date_fr, date_to, mode)
@@ -72,14 +72,16 @@ program main
   places = adjustl(places)
 
   do p = 1, size(places)
+  !do p = size(places), size(places)
 
     do i = 1, size(days)
 
-      do rd = 1, 1
+      do rd = 1, 12
 
         call print_title
 
-        call webpage%dl_auto (year     = days(i)%getYear(),  &
+        call webpage%dl_auto (cf       = cf,                 &
+                              year     = days(i)%getYear(),  &
                               mon      = days(i)%getMonth(), &
                               day      = days(i)%getDay(),   &
                               rd       = rd,                 &

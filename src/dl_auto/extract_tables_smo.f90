@@ -14,20 +14,19 @@ submodule (dl_auto_mo) extract_tables_smo
 
 contains
 
-  module subroutine extract_tables &
-      (this, lines, lines_cd, lines_rank, lines_pay, is_race_ok, file)
+module subroutine extract_tables &
+      (this, lines, lines_cd, lines_rank, lines_pay, skipped, file)
 
-    class(webpage_ty), intent(inout)           :: this
-    character(*),   intent(inout), allocatable :: lines(:), lines_cd(:)
-    character(*),   intent(inout), allocatable :: lines_rank(:), lines_pay(:)
-    logical,        intent(inout)              :: is_race_ok
-    character(*),   intent(in)                 :: file
+    class(webpage_ty), intent(inout)              :: this
+    character(*),      intent(inout), allocatable :: lines(:), lines_cd(:)
+    character(*),      intent(inout), allocatable :: lines_rank(:), lines_pay(:)
+    logical,           intent(inout)              :: skipped
+    character(*),      intent(in)                 :: file
 
     character( len(lines) ), allocatable :: lines_(:)
     logical                              :: is_table
     integer                              :: i_fr, i_to
-    integer                              :: nr, nr_result
-  !  integer                              :: nr, nr_cd, nr_result, nr_pay, nr_rank
+    integer                              :: nr, nr_cd, nr_result, nr_rank, nr_pay
     integer                              :: i, k, u
 
 !    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
@@ -40,8 +39,6 @@ contains
 
     allocate ( lines_(nr) )
     
-    is_table = .false.
-
     !
     ! Check if race is valid
     !
@@ -55,7 +52,12 @@ contains
 
       !  print *, 'skipped'
 
-        is_race_ok = .false.
+        print *, ''
+        print *, '***********************************************************'
+        print *, ' No race day, so skipped.'
+        print *, '***********************************************************'
+
+        skipped = .true.
 
         close (u)
 
@@ -110,6 +112,23 @@ contains
     lines_cd = lines_(i_fr:i_to)
 
     !print '(a)', 'done'
+
+    nr_cd = i_to - i_fr + 1
+
+    if (nr_cd < 6) then
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, ' Missing race condition data, so skipped.'
+      print *, '***********************************************************'
+
+      skipped = .true.
+
+      close (u)
+
+      return
+
+    end if
 
 !#ifdef debug
 !    print *, ''
@@ -198,6 +217,23 @@ contains
 
     end do
 
+    nr_result = i_to - i_fr + 1
+
+    if (nr_result < 7) then
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, ' Missing race result data, so skipped.'
+      print *, '***********************************************************'
+
+      skipped = .true.
+
+      close (u)
+
+      return
+
+    end if
+
 !#ifdef debug
 !    print *, ''
 !    do i = 1, nr_result
@@ -251,13 +287,31 @@ contains
 
     lines_rank = lines_(i_fr:i_to)
 
-!#ifdef debug
-!    nr_rank = i_to - i_fr + 1
-!    print *, ''
-!    do i = 1, nr_rank
-!      print '(a, i3, a, i3, a)', 'Line(rank): ', i, '/', nr_rank, '; '//trim( lines_rank(i) )
-!    end do
-!#endif
+    nr_rank = i_to - i_fr + 1
+
+    if (nr_rank < 7) then
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, ' Missing race ranking data, so skipped.'
+      print *, '***********************************************************'
+
+      skipped = .true.
+
+      close (u)
+
+      return
+
+    end if
+
+#ifdef debug
+  block
+    print *, ''
+    do i = 1, nr_rank
+      print '(a, i3, a, i3, a)', 'Line(rank): ', i, '/', nr_rank, '; '//trim( lines_rank(i) )
+    end do
+  end block
+#endif
 
     !
     ! Transaction for pay 
@@ -305,28 +359,60 @@ contains
 
     lines_pay = lines_(i_fr:i_to)
 
-!#ifdef debug
-!    nr_pay = i_to - i_fr + 1
-!    print *, ''
-!    do i = 1, nr_pay
-!      print '(a, i3, a, i3, a)', 'Line(pay): ', i, '/', nr_pay, '; '//trim( lines_pay(i) )
-!    end do
-!#endif
+    nr_pay = i_to - i_fr + 1
+
+    if (nr_pay < 96) then
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, ' Missing payout data, so skipped.'
+      print *, '***********************************************************'
+
+      skipped = .true.
+
+      close (u)
+
+      return
+
+    end if
+
+#ifdef debug
+    print *, ''
+    do i = 1, nr_pay
+      print '(a, i3, a, i3, a)', 'Line(pay): ', i, '/', nr_pay, '; '//trim( lines_pay(i) )
+    end do
+#endif
 
     !
     ! Payout 
     !
-     payout%exacta   = trim( lines_pay(  8) )
-     payout%quinella = trim( lines_pay( 23) )
-     payout%trifecta = trim( lines_pay( 36) )
-     payout%trio     = trim( lines_pay( 50) )
-     payout%wide(1)  = trim( lines_pay( 60) )
-     payout%wide(2)  = trim( lines_pay( 68) )
-     payout%wide(3)  = trim( lines_pay( 76) )
-     payout%win      = trim( lines_pay( 87) )
-     payout%place(1) = trim( lines_pay( 96) )
-     payout%place(2) = trim( lines_pay(101) )
-     payout%place(3) = trim( lines_pay(106) )
+    payout%exacta   = '' 
+    payout%quinella = '' 
+    payout%trifecta = '' 
+    payout%trio     = '' 
+    payout%wide     = '' 
+    payout%win      = '' 
+    payout%place    = '' 
+
+    payout%exacta   = trim( lines_pay(  8) )
+    payout%quinella = trim( lines_pay( 23) )
+    payout%trifecta = trim( lines_pay( 36) )
+    payout%trio     = trim( lines_pay( 50) )
+    payout%wide(1)  = trim( lines_pay( 60) )
+    payout%wide(2)  = trim( lines_pay( 68) )
+    payout%wide(3)  = trim( lines_pay( 76) )
+    payout%win      = trim( lines_pay( 87) )
+    payout%place(1) = trim( lines_pay( 96) )
+    if (nr_pay > 101) then
+      payout%place(2) = trim( lines_pay(101) )
+    else
+      payout%place(2) = '100'
+    end if
+    if (nr_pay > 106) then
+      payout%place(3) = trim( lines_pay(106) )
+    else
+      payout%place(3) = '100'
+    end if
 
     print *, ''
     print '(a)', repeat('=', 80)

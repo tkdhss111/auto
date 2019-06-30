@@ -11,27 +11,32 @@ submodule (dl_auto_mo) write_csv_files_smo
 
 contains
 
-  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, file, skipped)
+  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped, file)
 
-    class(webpage_ty), intent(inout)     :: this
-    character(*),      intent(in)        :: lines(:), lines_cd(:), lines_rank(:)
-    character(*),      intent(in)        :: file
-    logical,           intent(inout)     :: skipped
-    character(1),  allocatable           :: ranks_c(:, :)
-    character(10), allocatable           :: ranks_lap(:)
-    character(10), allocatable           :: payout_win(:)
-    character(10), allocatable           :: payout_place(:)
-    integer, allocatable                 :: bike(:)
-    integer, allocatable                 :: bike_rank_lap(:, :) ! Value: # bike
-    integer, allocatable                 :: rank_bike_lap(:, :) ! Value: rank
-    integer                              :: i, j, k, u, nr
-    integer                              :: rank, lap
+    class(webpage_ty), intent(inout) :: this
+    character(*),      intent(in)    :: lines(:), lines_cd(:), lines_rank(:)
+    logical,           intent(inout) :: skipped
+    character(*),      intent(in)    :: file
+
+    integer, parameter           :: MAX_NLAPS = 10
+    character(2)                 :: nlaps_wo_goal
+    character(1),  allocatable   :: ranks_c(:, :)
+    character(11)                :: ranks_lap(MAX_NLAPS)
+    character(10), allocatable   :: payout_win(:)
+    character(10), allocatable   :: payout_place(:)
+    integer, allocatable         :: bike(:)
+    integer, allocatable         :: bike_rank_lap(:, :) ! Value: # bike
+    integer, allocatable         :: rank_bike_lap(:, :) ! Value: rank
+    integer                      :: i, k, u, nr
+    integer                      :: rank, lap
+    character(1000), allocatable :: lines_out(:)
+    character(255)               :: key
 
     associate ( nrcrs => this%nrcrs, nlaps => this%nlaps )
 
-    allocate ( ranks_c(nrcrs, nlaps), bike_rank_lap(nrcrs, nlaps), rank_bike_lap(nrcrs, nlaps) )
+    allocate ( ranks_c(nrcrs, MAX_NLAPS), bike_rank_lap(nrcrs, nlaps), rank_bike_lap(nrcrs, nlaps) )
     allocate ( bike(nrcrs), payout_win(nrcrs), payout_place(nrcrs) )
-    allocate ( ranks_lap(nlaps - 1) )
+    allocate ( lines_out(0:nrcrs) )
 
     payout_win = '0'
     payout_win(1) = trim( payout%win )
@@ -101,7 +106,20 @@ contains
 
     end do
 
-    if (lap - 1 /= nlaps) stop 'Missing laps'
+    skipped = .false.
+
+    if (lap - 1 /= nlaps) then
+
+      print *, ''
+      print *, '***********************************************************'
+      print *, ' Missing laps, so skipped.'
+      print *, '***********************************************************'
+
+      skipped = .true.
+
+      return
+
+    end if
 
     do rank = 1, nrcrs
 
@@ -150,6 +168,7 @@ contains
     end do
 
     ! Convert integer to character for CSV writing
+    ranks_c = ''
     do lap = 1, nlaps
 
       do i = 1, nrcrs
@@ -164,7 +183,7 @@ contains
 
 #ifdef debug
     do i = 1, nrcrs
-      print '(a, i1, a, *(a2, :, " -> "))', 'Racer: ', i, ', Rank: ', ranks_c(i, :)
+      print '(a, i1, a, *(a2, :, " -> "))', 'Racer: ', i, ', Rank: ', ranks_c(i, :nlaps)
     end do
 
     print '(a)', repeat('=', 80)
@@ -173,9 +192,54 @@ contains
     !
     ! Write race results and conditions
     !
-    do i = 1, nlaps - 1
+    do i = 1, MAX_NLAPS
 
-      write ( ranks_lap(i), '(a,  i0)' ) 'rank_lap_',  i
+      write ( ranks_lap(i), '(a9, i0)' ) 'rank_lap_',  i
+
+    end do
+
+    write (nlaps_wo_goal, '(i0)') nlaps - 1
+
+    !write (u, FMT_CSV_STR)&
+    write (lines_out(0), '( *(a, :, ",") )')&
+      "key", "place", "date", "round", "distance", "we", "tp", "hm", "tp_road", "road", "nlaps", &
+      "rank_goal", "bike", "kanji_name_racer", "name_racer", "name_bike", "handycup", &
+      "sec_trial", "sec_race", "sec_start", "violation", "payout_win", "payout_place", &
+      ranks_lap
+
+    k = 1
+
+    do i = 1, nrcrs * 11, 11
+
+      write (key, '(a)') this%place(1:2)//'_'//this%t%strftime('%Y%m%d')//'_'//trim(this%rd_c)//'_'//trim(ranks_c(k, nlaps))
+
+      write (lines_out(k), '( *(a, :, ",") )') &
+        trim( key                ), & ! Key
+        trim( this%place         ), & ! Place
+        trim( this%t%dateformat()), & ! Date
+        trim( this%rd_c          ), & ! Round
+        trim( lines_cd(1)        ), & ! Distance in meters
+        trim( lines_cd(2)        ), & ! Weather condition
+        trim( lines_cd(3)        ), & ! Temperature
+        trim( lines_cd(4)        ), & ! Humidity
+        trim( lines_cd(5)        ), & ! Temperature of road
+        trim( lines_cd(6)        ), & ! Road condition
+        trim( nlaps_wo_goal      ), & ! Number of laps (not including the last 100m lap)
+        trim( ranks_c(k, nlaps)  ), & ! Goal ranking
+        trim( lines(i + 2)       ), & ! bike
+        trim( lines(i + 3)       ), & ! kanji_name_racer
+        trim( lines(i + 4)       ), & ! name_racer
+        trim( lines(i + 5)       ), & ! name_bike
+        trim( lines(i + 6)       ), & ! handycup
+        trim( lines(i + 7)       ), & ! sec_trial
+        trim( lines(i + 8)       ), & ! sec_race
+        trim( lines(i + 9)       ), & ! sec_start
+        trim( lines(i + 10)      ), & ! violation
+        trim( payout_win(k)      ), & ! Payout for win wager
+        trim( payout_place(k)    ), & ! Payout for place wager
+        ranks_c(k, :)                 ! Lap rankings
+
+      k = k + 1
 
     end do
 
@@ -183,44 +247,20 @@ contains
 
     open (newunit = u, file = file, status = 'replace')
 
-    write (u, FMT_CSV_STR)&
-      "place", "date", "rd", "meters_distance", "weather", "tp", "hm", "tp_road", "road", &
-      "rank_goal", "bike", "kanji_name_racer", &
-      "name_racer", "name_bike", "meters_handycup", &
-      "mins_trial", "mins_race", "mins_start", "violation", "payout_win", "payout_place", &
-      ranks_lap
+    do i = 0, nrcrs
 
-    k = 1
-
-    do i = 1, nrcrs * 11, 11
-
-      write (u, '(*(a, :, ","))')   &
-        trim( this%place  ),        & ! Place
-        trim( this%t%dateformat()), & ! Date
-        trim( this%rd_c   ),        & ! Round
-        trim( lines_cd(1) ),        & ! Distance in meters 
-        trim( lines_cd(2) ),        & ! Weather condition
-        trim( lines_cd(3) ),        & ! Temperature
-        trim( lines_cd(4) ),        & ! Humidity
-        trim( lines_cd(5) ),        & ! Temperature of road
-        trim( lines_cd(6) ),        & ! Road condition
-        ranks_c(k, nlaps),          & ! Goal ranking
-        [(lines(i + j), j = 2, 10)], & ! bike, kanji_name_racer, name_racer, name_bike, meters_handycup, mins_trial, mins_race, mins_start, violation
-        trim( payout_win(k) ),   &
-        trim( payout_place(k) ), &
-        ranks_c(k, 1:nlaps - 1)
-
-      k = k + 1
+!      print '(a)', trim( lines_out(i) )
+      write (u, '(a)') trim( lines_out(i) )
 
     end do
 
     close (u)
-
+    
     end associate
 
-!#ifdef debug
-!    print '(a)', 'done'
-!#endif
+#ifdef debug
+    print '(a)', 'done'
+#endif
 
   end subroutine
 
