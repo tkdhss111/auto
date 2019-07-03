@@ -1,6 +1,6 @@
 #!/bin/bash
 echo $HOME
-EXE=taketa_dl_auto
+EXE=taketa_make_db_race
 OPTIONS='--config /home/eric/1_Projects/auto/par/0_com/config.nml --mode routine'
 
 chmod -R 777 "${HOME}/1_Projects"

@@ -1,11 +1,11 @@
-! Last Updated: 2019-06-24 09:51:45
+! Last Updated: 2019-07-03 22:02:31
 !===========================================================
 ! Submodule for seting and getting URLs
 !
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-24
 !===========================================================
 
-submodule (dl_auto_mo) set_get_url_smo
+submodule (make_db_race_mo) set_get_url_smo
 
   implicit none
 
@@ -27,31 +27,33 @@ contains
     
     this%fn_csv = this%fn_html
 
+    this%htmlfile = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html'
+    this%csvfile  = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv'
+
   end subroutine
 
   module subroutine get_html (this)
 
     class(webpage_ty), intent(inout) :: this
-    character(255)                   :: cmd, outfile
+    character(255)                   :: cmd, cmdmsg = ''
     logical                          :: exist
+    integer                          :: exitstat
 
-!#ifdef debug
-    print '(a$)', 'Downloading htm: '//trim(this%url)//' ... '
-!#endif
+#ifdef debug
+    print '(a$)', 'Downloading html ... '
+#endif
 
-    outfile = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html'
-
-    inquire (file = outfile, exist = exist)
+    inquire (file = this%htmlfile, exist = exist)
 
     if (exist) then
 
-      print '(a)', 'skipped' ! Since the HTML file already exists
+      print '(a)', 'Skipped since the HTML file already exists.'
 
       return
 
     end if
 
-    cmd = trim('curl "'//trim(this%url)//'" -o "'//trim(outfile)//'"')
+    cmd = trim('curl --max-time 2 --retry 2 "'//trim(this%url)//'" -o "'//trim(this%htmlfile)//'"')
 
 !#ifdef debug
 !    print *, trim(cmd)
@@ -59,9 +61,15 @@ contains
 
     call execute_command_line ( 'mkdir -p '//trim(this%dir_html)//trim(this%place)//'/' )
 
-    call execute_command_line(cmd)
+    call execute_command_line(cmd, exitstat = exitstat, cmdmsg = cmdmsg)
 
+    if (exitstat == 7) stop 'Failed to connect to host' 
+
+    call sleep( int(10 * rand()) )
+
+#ifdef debug
     print '(a)', 'done'
+#endif
 
   end subroutine
 

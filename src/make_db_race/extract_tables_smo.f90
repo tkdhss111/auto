@@ -8,20 +8,19 @@
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-24
 !=================================================================================
 
-submodule (dl_auto_mo) extract_tables_smo
+submodule (make_db_race_mo) extract_tables_smo
 
   implicit none
 
 contains
 
 module subroutine extract_tables &
-      (this, lines, lines_cd, lines_rank, lines_pay, skipped, file)
+      (this, lines, lines_cd, lines_rank, lines_pay, skipped)
 
     class(webpage_ty), intent(inout)              :: this
     character(*),      intent(inout), allocatable :: lines(:), lines_cd(:)
     character(*),      intent(inout), allocatable :: lines_rank(:), lines_pay(:)
     logical,           intent(inout)              :: skipped
-    character(*),      intent(in)                 :: file
 
     character( len(lines) ), allocatable :: lines_(:)
     logical                              :: is_table
@@ -29,11 +28,11 @@ module subroutine extract_tables &
     integer                              :: nr, nr_cd, nr_result, nr_rank, nr_pay
     integer                              :: i, k, u
 
-!    print '(a$)', 'Opening a html file: '//trim(file)//' ... '
+!    print '(a$)', 'Opening a html file: '//trim(this%htmlfile)//' ... '
 
     is_table = .false.
 
-    open (newunit = u, file = file, status = 'old')
+    open (newunit = u, file = this%htmlfile, status = 'old')
 
     nr = count_rows (u)
 
@@ -50,12 +49,7 @@ module subroutine extract_tables &
            index(lines_(i), 'ページが見つかりません') > 0  .or. &
            index(lines_(i), '不成立') > 0 ) then
 
-      !  print *, 'skipped'
-
-        print *, ''
-        print *, '***********************************************************'
-        print *, ' No race day, so skipped.'
-        print *, '***********************************************************'
+        print *, ' Skipped since no race day.'
 
         skipped = .true.
 
@@ -118,9 +112,9 @@ module subroutine extract_tables &
     if (nr_cd < 6) then
 
       print *, ''
-      print *, '***********************************************************'
-      print *, ' Missing race condition data, so skipped.'
-      print *, '***********************************************************'
+      print *, '********************************************'
+      print *, ' Skipped since missing race condition data. '
+      print *, '********************************************'
 
       skipped = .true.
 
@@ -222,9 +216,9 @@ module subroutine extract_tables &
     if (nr_result < 7) then
 
       print *, ''
-      print *, '***********************************************************'
-      print *, ' Missing race result data, so skipped.'
-      print *, '***********************************************************'
+      print *, '*****************************************'
+      print *, ' Skipped since missing race result data. '
+      print *, '*****************************************'
 
       skipped = .true.
 
@@ -292,9 +286,9 @@ module subroutine extract_tables &
     if (nr_rank < 7) then
 
       print *, ''
-      print *, '***********************************************************'
-      print *, ' Missing race ranking data, so skipped.'
-      print *, '***********************************************************'
+      print *, '************************************'
+      print *, ' Skipped missing race ranking data. '
+      print *, '************************************'
 
       skipped = .true.
 
@@ -364,9 +358,9 @@ module subroutine extract_tables &
     if (nr_pay < 96) then
 
       print *, ''
-      print *, '***********************************************************'
-      print *, ' Missing payout data, so skipped.'
-      print *, '***********************************************************'
+      print *, '************************************'
+      print *, ' Skipped since missing payout data. '
+      print *, '************************************'
 
       skipped = .true.
 
@@ -414,6 +408,7 @@ module subroutine extract_tables &
       payout%place(3) = '100'
     end if
 
+#ifdef debug
     print *, ''
     print '(a)', repeat('=', 80)
     print '(a)', '  Payout'
@@ -426,6 +421,7 @@ module subroutine extract_tables &
     print '(a)', '  Place   : '//payout%place(1)//payout%place(2)//payout%place(3)
     print '(a)', '  Wide    : '//payout%wide(1)//payout%wide(2)//payout%wide(3)
     print '(a)', repeat('=', 80)
+#endif
 
     !-------------------------------------------------------------
 

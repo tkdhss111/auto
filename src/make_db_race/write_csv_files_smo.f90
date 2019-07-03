@@ -5,18 +5,17 @@
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-24
 !================================================
 
-submodule (dl_auto_mo) write_csv_files_smo
+submodule (make_db_race_mo) write_csv_files_smo
 
   implicit none
 
 contains
 
-  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped, file)
+  module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped)
 
     class(webpage_ty), intent(inout) :: this
     character(*),      intent(in)    :: lines(:), lines_cd(:), lines_rank(:)
     logical,           intent(inout) :: skipped
-    character(*),      intent(in)    :: file
 
     integer, parameter           :: MAX_NLAPS = 10
     character(2)                 :: nlaps_wo_goal
@@ -31,6 +30,17 @@ contains
     integer                      :: rank, lap
     character(1000), allocatable :: lines_out(:)
     character(255)               :: key
+    logical                      :: exist
+
+    inquire (file = this%csvfile, exist = exist)
+
+    if (exist) then
+
+      print '(a)', 'skipped since CSV file already exists'
+
+      return
+
+    end if
 
     associate ( nrcrs => this%nrcrs, nlaps => this%nlaps )
 
@@ -47,7 +57,7 @@ contains
     payout_place(3) = trim( payout%place(3) )
 
 !#ifdef debug
-!    print '(a$)', 'Writing a csv file: '//trim(file)//' ... '
+!    print '(a$)', 'Writing a csv file: '//trim(this%csvfile)//' ... '
 !#endif
 
     ! Check if accidents occured. If so, skip writing the CSV file.
@@ -243,9 +253,9 @@ contains
 
     end do
 
-    call execute_command_line ( 'mkdir -p '//trim( get_dirname(file) ) )
+    call execute_command_line ( 'mkdir -p '//trim( get_dirname(this%csvfile) ) )
 
-    open (newunit = u, file = file, status = 'replace')
+    open (newunit = u, file = this%csvfile, status = 'replace')
 
     do i = 0, nrcrs
 

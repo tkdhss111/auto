@@ -5,7 +5,7 @@
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-24
 !===========================================================
 
-submodule (dl_auto_mo) init_smo
+submodule (make_db_race_mo) init_smo
 
   implicit none
 

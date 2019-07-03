@@ -1,10 +1,10 @@
-! Last Updated: 2019-06-30 14:42:36.
+! Last Updated: 2019-07-03 17:02:46
 
 program main
 
   use file_mo
   use cli_mo
-  use dl_auto_mo
+  use make_db_race_mo
   use px_mo
   use license_mo
 
@@ -15,10 +15,10 @@ program main
   character(19)              :: date_fr, date_to, mode
   character(255)             :: cf_nml
   character(20), allocatable :: places(:)
-  integer                    :: rd, p
+  integer                    :: rd, p, p1
 
   cmd%title    = 'Program for downloading auto data as HTML'
-  cmd%exe      = 'dl_auto'
+  cmd%exe      = 'make_db_race'
   cmd%version  = '1.0'                                                                  ;i=i+1
   cmd%usage(i) = '====================================================================' ;i=i+1
   cmd%usage(i) = 'Usage: '//trim(cmd%exe)//' [OPTIONS]'                                 ;i=i+1
@@ -54,10 +54,13 @@ program main
 
 #ifdef debug
   cf_nml  = '/home/eric/1_Projects/auto/par/config.nml'
-  date_fr = '2011-03-14'
-  date_to = '2011-03-14'
+  date_fr = '2018-07-27'
+  date_to = '2018-07-27'
   mode    = 'nonexist'
 #else
+  !print *, 'Image: ', this_image(), '/', num_images()
+  !rd = this_image()
+
   call cmd%get_args (cf_nml, date_fr, date_to, mode)
 #endif
 
@@ -71,25 +74,30 @@ program main
 
   places = adjustl(places)
 
+  p1 = findloc (places, 'iizuka') 
+#ifdef debug
+  do p = p1, p1 
+#else
   do p = 1, size(places)
-  !do p = size(places), size(places)
-
+#endif
     do i = 1, size(days)
-
+!#ifdef debug
       do rd = 1, 12
-
+!#endif
         call print_title
 
-        call webpage%dl_auto (cf       = cf,                 &
-                              year     = days(i)%getYear(),  &
-                              mon      = days(i)%getMonth(), &
-                              day      = days(i)%getDay(),   &
-                              rd       = rd,                 &
-                              place    = places(p),          &
-                              dir_html = cf%dir_html,        &
-                              dir_csv  = cf%dir_csv)
+        call webpage%make_db_race (cf       = cf,                 &
+                                   mode     = mode,               &
+                                   year     = days(i)%getYear(),  &
+                                   mon      = days(i)%getMonth(), &
+                                   day      = days(i)%getDay(),   &
+                                   rd       = rd,                 &
+                                   place    = places(p),          &
+                                   dir_html = cf%dir_html,        &
+                                   dir_csv  = cf%dir_csv)
+!#ifdef debug
       end do
-
+!#endif
     end do
 
   end do
@@ -100,7 +108,10 @@ program main
 
       print *, ''
       print '(a)', repeat('=', 80)
-      print '(a, i2)', '  Place: '//trim( places(p) )//', Day: '//days(i)%dateformat()//', Round: ', rd
+      print '(a, i2)',&
+        '  Place: '//trim( places(p) )//&
+        ', Day: '//days(i)%dateformat()//&
+        ', Round: ', rd
       print '(a)', repeat('-', 80)
 
     end subroutine

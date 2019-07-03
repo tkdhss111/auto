@@ -5,7 +5,7 @@
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-15
 !===========================================================
 
-module dl_auto_mo
+module make_db_race_mo
 
   use file_mo
   use px_mo
@@ -93,12 +93,14 @@ module dl_auto_mo
     character(255) :: dir_csv  = '.'
     character(255) :: fn_html  = 'html'
     character(255) :: fn_csv   = 'csv'
+    character(255) :: htmlfile = 'NA'
+    character(255) :: csvfile  = 'NA'
 
   contains
 
     procedure :: set_url
     procedure :: get_html
-    procedure :: dl_auto
+    procedure :: make_db_race
     procedure :: construct_race
     procedure :: extract_tables
     procedure :: write_csv_files
@@ -171,12 +173,11 @@ module dl_auto_mo
   !
   interface extract_tables
     module subroutine extract_tables &
-        (this, lines, lines_cd, lines_rank, lines_pay, skipped, file)
+        (this, lines, lines_cd, lines_rank, lines_pay, skipped)
       class(webpage_ty), intent(inout)              :: this
       character(*),      intent(inout), allocatable :: lines(:), lines_cd(:)
       character(*),      intent(inout), allocatable :: lines_rank(:), lines_pay(:)
       logical,           intent(inout)              :: skipped
-      character(*),      intent(in)                 :: file
     end subroutine
   end interface
   
@@ -191,26 +192,26 @@ module dl_auto_mo
   ! Interface for submodule: write_csv_files_smo.f90
   !
   interface write_csv_files
-    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped, file)
+    module subroutine write_csv_files (this, lines, lines_cd, lines_rank, skipped)
       class(webpage_ty), intent(inout) :: this
       character(*),      intent(in)    :: lines(:), lines_cd(:), lines_rank(:)
       logical,           intent(inout) :: skipped
-      character(*),      intent(in)    :: file
     end subroutine
   end interface
 
 contains
 
-  subroutine dl_auto (this, cf, year, mon, day, rd, place, dir_html, dir_csv)
+  subroutine make_db_race (this, cf, mode, year, mon, day, rd, place, dir_html, dir_csv)
 
     class(webpage_ty), intent(inout) :: this
     type(cf_ty),       intent(in)    :: cf
     integer,           intent(in)    :: year, mon, day, rd
-    character(*),      intent(in)    :: place, dir_html, dir_csv
+    character(*),      intent(in)    :: mode, place, dir_html, dir_csv
     character(1000), allocatable     :: lines(:), lines_cd(:)
     character(1000), allocatable     :: lines_rank(:), lines_pay(:)
-    logical                          :: skipped
     character(20)                    :: ctys(33) ! N.B. Need to change if you increase columns
+    logical                          :: skipped
+    logical                          :: exist
 
     this%t        = datetime(year = year, month = mon, day = day)
     this%rd       = rd
@@ -218,44 +219,18 @@ contains
     this%dir_html = trim(dir_html)
     this%dir_csv  = trim(dir_csv)
 
-    !
-    ! Skipped date and round list
-    !
-!    if ( this%place == 'kawaguchi' ) then
-!
-!      if ( this%t%dateformat() == '2011-03-12') return
-!      if ( this%t%dateformat() == '2011-03-13') return
-!      if ( this%t%dateformat() == '2011-03-14') return
-!
-!    end if
-
-!    if ( this%place == 'isesaki' ) then
-!
-!      if ( this%t%dateformat() == '2011-03-15') return
-!      if ( this%t%dateformat() == '2011-03-16') return
-!      if ( this%t%dateformat() == '2011-03-17') return
-!      if ( this%t%dateformat() == '2011-03-26') return
-!      if ( this%t%dateformat() == '2011-03-27') return
-!      if ( this%t%dateformat() == '2011-03-28') return
-!      if ( this%t%dateformat() == '2011-03-29') return
-!
-!    end if
-
     call this%set_url
 
     call this%get_html
 
     skipped = .false.
+    call this%extract_tables ( lines, lines_cd, lines_rank, lines_pay, skipped )
 
-    call this%extract_tables ( lines, lines_cd, lines_rank, lines_pay, skipped, &
-      file = trim(this%dir_html)//trim(this%place)//'/'//trim(this%fn_html)//'.html' )
+    if (skipped .and. mode == 'nonexist') return
 
-    if (skipped) return
+    call this%write_csv_files ( lines, lines_cd, lines_rank, skipped )
 
-    call this%write_csv_files ( lines, lines_cd, lines_rank, skipped, &
-      file = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv' )
-
-    if (skipped) return
+    if (skipped .and. mode == 'nonexist') return
 
     ctys( 1) = 'char(80)' ! key
     ctys( 2) = 'char(30)' ! place
@@ -286,7 +261,7 @@ contains
                       tbnm    = cf%TB_RACE, &
                       primary = 'key',      &
                       ctys    = ctys,       &
-                      csv     = trim(this%dir_csv)//trim(this%place)//'/'//trim(this%fn_csv)//'.csv')
+                      csv     = this%csvfile )
 
 
   end subroutine

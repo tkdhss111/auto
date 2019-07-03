@@ -5,7 +5,7 @@
 ! Created by : Hisashi Takeda, Ph.D., 2019-06-24
 !===========================================================
 
-submodule (dl_auto_mo) clean_lines_smo
+submodule (make_db_race_mo) clean_lines_smo
 
   use string_helpers
   
